@@ -21,7 +21,7 @@ export async function ensureRuntimeDirs() {
   ]);
 }
 
-export async function transcribeUrl(inputUrl) {
+export async function transcribeUrl(inputUrl, options = {}) {
   if (!inputUrl || typeof inputUrl !== 'string') {
     throw createHttpError(400, 'URL is required.');
   }
@@ -40,10 +40,10 @@ export async function transcribeUrl(inputUrl) {
   await assertCommandAvailable(getYtDlpCommand());
   await assertCommandAvailable(getFfmpegCommand());
 
-  return transcribeFromUrlStream(inputUrl);
+  return transcribeFromUrlStream(inputUrl, options);
 }
 
-export async function transcribeFile(file) {
+export async function transcribeFile(file, options = {}) {
   if (!file) {
     throw createHttpError(400, 'Audio or video file is required.');
   }
@@ -55,10 +55,10 @@ export async function transcribeFile(file) {
   await streamPipeline(createReadStream(file.path), createWriteStream(savedSourcePath));
   await rm(file.path, { force: true });
 
-  return transcribeFromFileStream(savedSourcePath, safeOriginalName);
+  return transcribeFromFileStream(savedSourcePath, safeOriginalName, options);
 }
 
-async function transcribeFromUrlStream(inputUrl) {
+async function transcribeFromUrlStream(inputUrl, options) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
@@ -66,17 +66,17 @@ async function transcribeFromUrlStream(inputUrl) {
 
   if (engine === 'local-stdin') {
     await assertCommandAvailable(getWhisperCommand());
-    const rawText = await runUrlToWhisperStdin(inputUrl, timestamp);
-    return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine });
+    const rawText = await runUrlToWhisperStdin(inputUrl, timestamp, options);
+    return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine }, options);
   }
 
-  await runUrlToWav(inputUrl, wavPath);
-  const rawText = await transcribeWavFile(wavPath, timestamp);
+  await runUrlToWav(inputUrl, wavPath, options);
+  const rawText = await transcribeWavFile(wavPath, timestamp, options);
   await rm(wavPath, { force: true });
-  return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine });
+  return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine }, options);
 }
 
-async function transcribeFromFileStream(sourcePath, originalName) {
+async function transcribeFromFileStream(sourcePath, originalName, options) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
@@ -84,18 +84,26 @@ async function transcribeFromFileStream(sourcePath, originalName) {
 
   if (engine === 'local-stdin') {
     await assertCommandAvailable(getWhisperCommand());
-    const rawText = await runFileToWhisperStdin(sourcePath, timestamp);
-    return finalizeTranscript(rawText, outputPath, { source: originalName, engine });
+    const rawText = await runFileToWhisperStdin(sourcePath, timestamp, options);
+    return finalizeTranscript(rawText, outputPath, { source: originalName, engine }, options);
   }
 
-  await runFileToWav(sourcePath, wavPath);
-  const rawText = await transcribeWavFile(wavPath, timestamp);
+  await runFileToWav(sourcePath, wavPath, options);
+  const rawText = await transcribeWavFile(wavPath, timestamp, options);
   await rm(wavPath, { force: true });
-  return finalizeTranscript(rawText, outputPath, { source: originalName, engine });
+  return finalizeTranscript(rawText, outputPath, { source: originalName, engine }, options);
 }
 
-async function runUrlToWav(inputUrl, wavPath) {
-  const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl]);
+async function runUrlToWav(inputUrl, wavPath, options) {
+  emitProgress(options, 'download', 1, 'Downloading audio');
+  const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl], {
+    onStderr: (line) => {
+      const percent = parseYtDlpProgress(line);
+      if (percent !== null) {
+        emitProgress(options, 'download', percent, 'Downloading audio');
+      }
+    }
+  });
   const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
@@ -117,9 +125,11 @@ async function runUrlToWav(inputUrl, wavPath) {
   ffmpeg.stdout.pipe(writer);
 
   await waitForPipeline([ytdlp, ffmpeg], writer);
+  emitProgress(options, 'download', 100, 'Audio downloaded and converted');
 }
 
-async function runFileToWav(sourcePath, wavPath) {
+async function runFileToWav(sourcePath, wavPath, options) {
+  emitProgress(options, 'convert', 5, 'Converting uploaded file');
   const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
@@ -139,10 +149,19 @@ async function runFileToWav(sourcePath, wavPath) {
   const writer = createWriteStream(wavPath);
   ffmpeg.stdout.pipe(writer);
   await waitForPipeline([ffmpeg], writer);
+  emitProgress(options, 'convert', 100, 'File converted');
 }
 
-async function runUrlToWhisperStdin(inputUrl, timestamp) {
-  const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl]);
+async function runUrlToWhisperStdin(inputUrl, timestamp, options) {
+  emitProgress(options, 'download', 1, 'Downloading audio');
+  const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl], {
+    onStderr: (line) => {
+      const percent = parseYtDlpProgress(line);
+      if (percent !== null) {
+        emitProgress(options, 'download', percent, 'Downloading audio');
+      }
+    }
+  });
   const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
@@ -158,16 +177,20 @@ async function runUrlToWhisperStdin(inputUrl, timestamp) {
     'wav',
     'pipe:1'
   ]);
+  emitProgress(options, 'transcribe', 5, 'Transcribing audio');
   const whisper = spawnWhisperForInput('-', timestamp);
 
   ytdlp.stdout.pipe(ffmpeg.stdin);
   ffmpeg.stdout.pipe(whisper.stdin);
 
   const result = await waitForPipeline([ytdlp, ffmpeg, whisper]);
+  emitProgress(options, 'download', 100, 'Audio downloaded');
+  emitProgress(options, 'transcribe', 100, 'Transcription complete');
   return readWhisperResult(result, timestamp);
 }
 
-async function runFileToWhisperStdin(sourcePath, timestamp) {
+async function runFileToWhisperStdin(sourcePath, timestamp, options) {
+  emitProgress(options, 'convert', 5, 'Converting uploaded file');
   const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
@@ -183,31 +206,38 @@ async function runFileToWhisperStdin(sourcePath, timestamp) {
     'wav',
     'pipe:1'
   ]);
+  emitProgress(options, 'transcribe', 5, 'Transcribing audio');
   const whisper = spawnWhisperForInput('-', timestamp);
 
   ffmpeg.stdout.pipe(whisper.stdin);
 
   const result = await waitForPipeline([ffmpeg, whisper]);
+  emitProgress(options, 'convert', 100, 'File converted');
+  emitProgress(options, 'transcribe', 100, 'Transcription complete');
   return readWhisperResult(result, timestamp);
 }
 
-async function transcribeWavFile(wavPath, timestamp) {
+async function transcribeWavFile(wavPath, timestamp, options) {
   const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+  emitProgress(options, 'transcribe', 5, 'Transcribing audio');
 
   if (engine === 'openai') {
-    return transcribeWithOpenAI(wavPath);
+    const text = await transcribeWithOpenAI(wavPath);
+    emitProgress(options, 'transcribe', 100, 'Transcription complete');
+    return text;
   }
 
   await assertCommandAvailable(getWhisperCommand());
   const whisper = spawnWhisperForInput(wavPath, timestamp);
   const result = await waitForPipeline([whisper]);
+  emitProgress(options, 'transcribe', 100, 'Transcription complete');
   return readWhisperResult(result, timestamp);
 }
 
 function spawnWhisperForInput(input, timestamp) {
   const command = getWhisperCommand();
   const outputDir = path.join(TMP_DIR, `whisper-${timestamp}`);
-  const rawArgs = process.env.WHISPER_ARGS || '{input} --model base --language auto --output_format txt --output_dir {outputDir}';
+  const rawArgs = process.env.WHISPER_ARGS || '{input} --model base --output_format txt --output_dir {outputDir}';
   const args = rawArgs
     .split(' ')
     .filter(Boolean)
@@ -230,9 +260,11 @@ async function transcribeWithOpenAI(wavPath) {
   return response.text || '';
 }
 
-async function finalizeTranscript(rawText, outputPath, meta) {
+async function finalizeTranscript(rawText, outputPath, meta, options) {
+  emitProgress(options, 'postprocess', 10, 'Post-processing transcript');
   const text = postProcessTranscript(rawText);
   await writeFile(outputPath, text, 'utf8');
+  emitProgress(options, 'postprocess', 100, 'Transcript saved');
 
   return {
     text,
@@ -300,7 +332,7 @@ function getWhisperCommand() {
 function spawnLogged(command, args, options = {}) {
   const child = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: process.env
+    env: buildChildEnv()
   });
 
   child.meta = {
@@ -314,6 +346,7 @@ function spawnLogged(command, args, options = {}) {
   child.stderr.on('data', (chunk) => {
     const line = chunk.toString();
     child.meta.stderr.push(line);
+    options.onStderr?.(line);
     process.stderr.write(`[${command}] ${line}`);
   });
 
@@ -328,6 +361,33 @@ function spawnLogged(command, args, options = {}) {
   });
 
   return child;
+}
+
+function emitProgress(options, stage, progress, message) {
+  options.onProgress?.({
+    stage,
+    progress: Math.max(0, Math.min(100, Math.round(progress))),
+    message
+  });
+}
+
+function parseYtDlpProgress(line) {
+  const match = line.match(/\[download]\s+(\d+(?:\.\d+)?)%/);
+  return match ? Number(match[1]) : null;
+}
+
+function buildChildEnv() {
+  const pathParts = [
+    path.dirname(getYtDlpCommand()),
+    path.dirname(getFfmpegCommand()),
+    path.dirname(getWhisperCommand()),
+    process.env.PATH || ''
+  ].filter(Boolean);
+
+  return {
+    ...process.env,
+    PATH: [...new Set(pathParts)].join(path.delimiter)
+  };
 }
 
 async function waitForPipeline(children, writable) {
