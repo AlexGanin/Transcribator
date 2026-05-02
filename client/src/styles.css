@@ -39,14 +39,44 @@ label {
   font-weight: 700;
 }
 
+fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.radioGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.radioOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.radioOption input {
+  width: auto;
+}
+
 input,
 textarea,
+select,
 button {
   font: inherit;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid #bbb;
   border-radius: 6px;
@@ -61,6 +91,12 @@ button {
   background: #222;
   color: #fff;
   cursor: pointer;
+}
+
+.secondaryButton {
+  background: #f1f1f1;
+  color: #222;
+  border: 1px solid #cfcfcf;
 }
 
 button:disabled {
@@ -131,7 +167,9 @@ button:disabled {
   background: #245b2b;
 }
 
-.result {
+.resultStack {
+  display: grid;
+  gap: 16px;
   margin-top: 20px;
 }
 
@@ -141,6 +179,10 @@ textarea {
   line-height: 1.5;
 }
 
+.summaryText {
+  min-height: 140px;
+}
+
 .error {
   color: #a40000;
   font-weight: 700;
@@ -148,4 +190,94 @@ textarea {
 
 .saved {
   color: #245b2b;
+}
+
+.history {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.historyHeader,
+.historyTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.historyHeader h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.historyList {
+  display: grid;
+  gap: 10px;
+}
+
+.historyItem {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.historyItem p {
+  margin: 4px 0 0;
+  color: #555;
+  word-break: break-word;
+}
+
+.historyTime {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  white-space: nowrap;
+}
+
+.historyStages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.historyStages span {
+  padding: 4px 8px;
+  border: 1px solid #d7d7d7;
+  border-radius: 999px;
+  background: #f7f7f7;
+  font-size: 14px;
+}
+
+.historyDetails {
+  display: grid;
+  gap: 10px;
+}
+
+.historyDetails summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.historyDetails label {
+  margin-top: 10px;
+}
+
+.historyText {
+  min-height: 140px;
+}
+
+.statusDone {
+  color: #245b2b;
+}
+
+.statusError {
+  color: #a40000;
+}
+
+.muted {
+  color: #666;
 }

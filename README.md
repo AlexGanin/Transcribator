@@ -36,6 +36,35 @@ Then the backend connects:
 yt-dlp stdout -> ffmpeg stdin -> ffmpeg stdout -> whisper stdin
 ```
 
+## Transcription Engines
+
+The UI has a `Transcription engine` selector. The backend receives the selected engine per request, so you can switch implementations without changing the pipeline code.
+
+Available engines:
+
+- `mlx-whisper`: local MLX Whisper for Apple Silicon GPU/Metal acceleration.
+- `openai-whisper`: local OpenAI Whisper CLI. This is the original CPU-oriented fallback.
+- `openai`: OpenAI Audio Transcriptions API.
+
+Local `.env` example:
+
+```env
+TRANSCRIPTION_ENGINE=openai-whisper
+WHISPER_COMMAND=/Users/your-user/.local/bin/whisper
+WHISPER_ARGS={input} --model base --output_format txt --output_dir {outputDir}
+
+MLX_WHISPER_COMMAND=/Users/your-user/.local/bin/mlx_whisper
+MLX_WHISPER_ARGS={input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}
+```
+
+Install MLX Whisper:
+
+```sh
+pipx install mlx-whisper
+```
+
+MLX Whisper needs an Apple Silicon Mac with accessible Metal GPU. If it is launched from a headless, sandboxed or virtualized session, it may fail with `No Metal device available`; in that case, run the dev server from a normal macOS terminal session.
+
 ## System Requirements
 
 Install these system tools and make sure they are available in `PATH`:

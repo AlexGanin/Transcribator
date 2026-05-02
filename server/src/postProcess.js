@@ -47,3 +47,44 @@ export function postProcessTranscript(rawText) {
 
   return paragraphs.join('\n\n');
 }
+
+export function summarizeTranscript(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+
+  const sentences = text
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length === 0) {
+    return '';
+  }
+
+  const selected = [];
+  const targetCount = Math.min(6, Math.max(3, Math.ceil(sentences.length * 0.12)));
+
+  selected.push(sentences[0]);
+
+  if (sentences.length > 3) {
+    selected.push(sentences[Math.floor(sentences.length / 3)]);
+  }
+
+  if (sentences.length > 6) {
+    selected.push(sentences[Math.floor((sentences.length * 2) / 3)]);
+  }
+
+  for (const sentence of sentences) {
+    if (selected.length >= targetCount) break;
+    if (!selected.includes(sentence)) {
+      selected.push(sentence);
+    }
+  }
+
+  return selected
+    .slice(0, 6)
+    .map((sentence) => `- ${sentence}`)
+    .join('\n');
+}

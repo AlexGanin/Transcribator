@@ -5,7 +5,7 @@ import multer from 'multer';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
-import { createJob, getJob } from './jobs.js';
+import { createJob, getJob, listHistory } from './jobs.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -31,7 +31,10 @@ app.get('/health', (req, res) => {
 
 app.post('/transcribe/url', async (req, res, next) => {
   try {
-    const job = createJob((onProgress) => transcribeUrl(req.body?.url, { onProgress }));
+    const job = createJob(
+      (onProgress) => transcribeUrl(req.body?.url, { engine: req.body?.engine, onProgress }),
+      { sourceType: 'url', source: req.body?.url, engine: req.body?.engine }
+    );
     res.status(202).json({ jobId: job.id });
   } catch (error) {
     next(error);
@@ -40,8 +43,19 @@ app.post('/transcribe/url', async (req, res, next) => {
 
 app.post('/transcribe/file', upload.single('file'), async (req, res, next) => {
   try {
-    const job = createJob((onProgress) => transcribeFile(req.file, { onProgress }));
+    const job = createJob(
+      (onProgress) => transcribeFile(req.file, { engine: req.body?.engine, onProgress }),
+      { sourceType: 'file', source: req.file?.originalname, engine: req.body?.engine }
+    );
     res.status(202).json({ jobId: job.id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/transcribe/history', async (req, res, next) => {
+  try {
+    res.json({ history: await listHistory() });
   } catch (error) {
     next(error);
   }

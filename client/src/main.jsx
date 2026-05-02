@@ -18,14 +18,33 @@ const FILE_STAGES = [
   { id: 'postprocess', label: 'Post-process and save text' }
 ];
 
+const TRANSCRIPTION_ENGINES = [
+  { value: 'mlx-whisper', label: 'MLX Whisper (Apple Silicon GPU)' },
+  { value: 'openai-whisper', label: 'OpenAI Whisper local CPU' },
+  { value: 'openai', label: 'OpenAI API' }
+];
+
+const STAGE_LABELS = {
+  upload: 'Upload',
+  download: 'Download',
+  convert: 'Convert',
+  transcribe: 'Transcribe',
+  postprocess: 'Post-process'
+};
+
 function App() {
+  const [sourceMode, setSourceMode] = useState('url');
   const [url, setUrl] = useState('');
   const [file, setFile] = useState(null);
-  const [result, setResult] = useState('');
+  const [engine, setEngine] = useState('mlx-whisper');
+  const [summary, setSummary] = useState('');
+  const [cleanText, setCleanText] = useState('');
+  const [rawText, setRawText] = useState('');
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [outputPath, setOutputPath] = useState('');
   const [stages, setStages] = useState([]);
+  const [history, setHistory] = useState([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startedAtRef = useRef(null);
   const eventSourceRef = useRef(null);
@@ -54,6 +73,8 @@ function App() {
   }, [status]);
 
   useEffect(() => {
+    loadHistory();
+
     return () => {
       eventSourceRef.current?.close();
     };
@@ -61,23 +82,26 @@ function App() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const stageTemplate = file ? FILE_STAGES : URL_STAGES;
+    const isFileMode = sourceMode === 'file';
+    const stageTemplate = isFileMode ? FILE_STAGES : URL_STAGES;
 
     eventSourceRef.current?.close();
     startedAtRef.current = Date.now();
     setStatus('running');
     setError('');
-    setResult('');
+    setSummary('');
+    setCleanText('');
+    setRawText('');
     setOutputPath('');
     setElapsedSeconds(0);
     setStages(createStages(stageTemplate));
 
     try {
-      const response = file
-        ? await transcribeFile(file, (uploadProgress) => updateStage('upload', uploadProgress, 'running', false))
-        : await transcribeUrl(url);
+      const response = isFileMode
+        ? await transcribeFile(file, engine, (uploadProgress) => updateStage('upload', uploadProgress, 'running', false))
+        : await transcribeUrl(url, engine);
 
-      if (file) {
+      if (isFileMode) {
         finishStage('upload');
       }
 
@@ -101,9 +125,12 @@ function App() {
 
       if (event.type === 'done') {
         completeAllStages();
-        setResult(event.result?.text || '');
+        setSummary(event.result?.summary || '');
+        setCleanText(event.result?.cleanText || event.result?.text || '');
+        setRawText(event.result?.rawText || '');
         setOutputPath(event.result?.outputPath || '');
         finishRun('done');
+        loadHistory();
         eventSourceRef.current = null;
         eventSource.close();
       }
@@ -111,6 +138,7 @@ function App() {
       if (event.type === 'error') {
         finishRun('error');
         setError(event.error || 'Transcription failed.');
+        loadHistory();
         eventSourceRef.current = null;
         eventSource.close();
       }
@@ -176,7 +204,22 @@ function App() {
     setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
   }
 
-  const disabled = status === 'running' || (!url.trim() && !file);
+  async function loadHistory() {
+    try {
+      const response = await axios.get(`${API_URL}/transcribe/history`);
+      setHistory(response.data.history || []);
+    } catch {
+      setHistory([]);
+    }
+  }
+
+  function handleSourceModeChange(nextMode) {
+    setSourceMode(nextMode);
+    setUrl('');
+    setFile(null);
+  }
+
+  const disabled = status === 'running' || (sourceMode === 'url' ? !url.trim() : !file);
   const showProgress = stages.length > 0 && status !== 'idle';
 
   return (
@@ -184,25 +227,62 @@ function App() {
       <section className="panel">
         <h1>Transcribator</h1>
         <form onSubmit={handleSubmit} className="form">
-          <label>
-            URL
-            <input
-              type="url"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              disabled={Boolean(file) || status === 'running'}
-            />
-          </label>
+          <fieldset className="radioGroup" disabled={status === 'running'}>
+            <legend>Source</legend>
+            <label className="radioOption">
+              <input
+                type="radio"
+                name="source"
+                value="url"
+                checked={sourceMode === 'url'}
+                onChange={() => handleSourceModeChange('url')}
+              />
+              URL
+            </label>
+            <label className="radioOption">
+              <input
+                type="radio"
+                name="source"
+                value="file"
+                checked={sourceMode === 'file'}
+                onChange={() => handleSourceModeChange('file')}
+              />
+              Local file
+            </label>
+          </fieldset>
+
+          {sourceMode === 'url' ? (
+            <label>
+              URL
+              <input
+                type="url"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                disabled={status === 'running'}
+              />
+            </label>
+          ) : (
+            <label>
+              Local file
+              <input
+                type="file"
+                accept="audio/*,video/*"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                disabled={status === 'running'}
+              />
+            </label>
+          )}
 
           <label>
-            Local file
-            <input
-              type="file"
-              accept="audio/*,video/*"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-              disabled={status === 'running'}
-            />
+            Transcription engine
+            <select value={engine} onChange={(event) => setEngine(event.target.value)} disabled={status === 'running'}>
+              {TRANSCRIPTION_ENGINES.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <button type="submit" disabled={disabled}>
@@ -244,10 +324,86 @@ function App() {
         {error && <p className="error">{error}</p>}
         {outputPath && <p className="saved">Saved to: {outputPath}</p>}
 
-        <label className="result">
-          Result
-          <textarea value={result} readOnly placeholder="Transcription result will appear here." />
-        </label>
+        <section className="resultStack">
+          <label>
+            Summary
+            <textarea className="summaryText" value={summary} readOnly placeholder="Short summary will appear here." />
+          </label>
+
+          <label>
+            Clean transcript
+            <textarea value={cleanText} readOnly placeholder="Cleaned transcript will appear here." />
+          </label>
+
+          <label>
+            Raw transcript
+            <textarea value={rawText} readOnly placeholder="Raw transcription result will appear here." />
+          </label>
+        </section>
+
+        <section className="history">
+          <div className="historyHeader">
+            <h2>History</h2>
+            <button type="button" className="secondaryButton" onClick={loadHistory}>
+              Refresh
+            </button>
+          </div>
+
+          {history.length === 0 ? (
+            <p className="muted">No completed runs yet.</p>
+          ) : (
+            <div className="historyList">
+              {history.map((item) => (
+                <article className="historyItem" key={item.id}>
+                  <div className="historyTop">
+                    <div>
+                      <strong>{engineLabel(item.engine)}</strong>
+                      <p>{item.source || item.sourceType}</p>
+                    </div>
+                    <div className="historyTime">
+                      <span className={item.status === 'done' ? 'statusDone' : 'statusError'}>{item.status}</span>
+                      <strong>{formatElapsed(item.elapsedSeconds)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="historyStages">
+                    {item.stages.map((stage) => (
+                      <span key={stage.id}>
+                        {STAGE_LABELS[stage.id] || stage.id}: {formatElapsed(stage.elapsedSeconds)}
+                      </span>
+                    ))}
+                  </div>
+
+                  {item.error && <p className="error">{item.error}</p>}
+
+                  {(item.summary || item.cleanText || item.rawText) && (
+                    <details className="historyDetails">
+                      <summary>Texts</summary>
+                      {item.summary && (
+                        <label>
+                          Summary
+                          <textarea className="historyText" value={item.summary} readOnly />
+                        </label>
+                      )}
+                      {item.cleanText && (
+                        <label>
+                          Clean transcript
+                          <textarea className="historyText" value={item.cleanText} readOnly />
+                        </label>
+                      )}
+                      {item.rawText && (
+                        <label>
+                          Raw transcript
+                          <textarea className="historyText" value={item.rawText} readOnly />
+                        </label>
+                      )}
+                    </details>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </section>
     </main>
   );
@@ -265,13 +421,14 @@ function createStages(stageTemplate) {
   }));
 }
 
-function transcribeUrl(url) {
-  return axios.post(`${API_URL}/transcribe/url`, { url }, { timeout: 0 });
+function transcribeUrl(url, engine) {
+  return axios.post(`${API_URL}/transcribe/url`, { url, engine }, { timeout: 0 });
 }
 
-function transcribeFile(file, onUploadProgressPercent) {
+function transcribeFile(file, engine, onUploadProgressPercent) {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('engine', engine);
   return axios.post(`${API_URL}/transcribe/file`, formData, {
     timeout: 0,
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -286,6 +443,10 @@ function formatElapsed(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function engineLabel(value) {
+  return TRANSCRIPTION_ENGINES.find((engine) => engine.value === value)?.label || value || 'Default engine';
 }
 
 createRoot(document.getElementById('root')).render(<App />);

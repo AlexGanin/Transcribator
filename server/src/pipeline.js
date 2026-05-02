@@ -5,13 +5,17 @@ import path from 'node:path';
 import { pipeline as streamPipeline } from 'node:stream/promises';
 import { once } from 'node:events';
 import OpenAI from 'openai';
-import { postProcessTranscript } from './postProcess.js';
+import { postProcessTranscript, summarizeTranscript } from './postProcess.js';
 
 const ROOT_DIR = path.resolve(process.cwd(), '..');
 const SOURCE_DIR = path.join(ROOT_DIR, 'source');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'output');
 const TMP_DIR = path.join(ROOT_DIR, 'tmp');
 const DEFAULT_TIMEOUT_MS = Number(process.env.TRANSCRIBE_TIMEOUT_MS || 15 * 60 * 1000);
+const ENGINE_OPENAI_WHISPER = 'openai-whisper';
+const ENGINE_MLX_WHISPER = 'mlx-whisper';
+const ENGINE_OPENAI_API = 'openai';
+const ENGINE_LOCAL_STDIN = 'local-stdin';
 
 export async function ensureRuntimeDirs() {
   await Promise.all([
@@ -62,9 +66,9 @@ async function transcribeFromUrlStream(inputUrl, options) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
-  const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+  const engine = getTranscriptionEngine(options);
 
-  if (engine === 'local-stdin') {
+  if (engine === ENGINE_LOCAL_STDIN) {
     await assertCommandAvailable(getWhisperCommand());
     const rawText = await runUrlToWhisperStdin(inputUrl, timestamp, options);
     return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine }, options);
@@ -80,9 +84,9 @@ async function transcribeFromFileStream(sourcePath, originalName, options) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
-  const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+  const engine = getTranscriptionEngine(options);
 
-  if (engine === 'local-stdin') {
+  if (engine === ENGINE_LOCAL_STDIN) {
     await assertCommandAvailable(getWhisperCommand());
     const rawText = await runFileToWhisperStdin(sourcePath, timestamp, options);
     return finalizeTranscript(rawText, outputPath, { source: originalName, engine }, options);
@@ -178,7 +182,7 @@ async function runUrlToWhisperStdin(inputUrl, timestamp, options) {
     'pipe:1'
   ]);
   emitProgress(options, 'transcribe', 5, 'Transcribing audio');
-  const whisper = spawnWhisperForInput('-', timestamp);
+  const whisper = await spawnOpenAIWhisperForInput('-', timestamp);
 
   ytdlp.stdout.pipe(ffmpeg.stdin);
   ffmpeg.stdout.pipe(whisper.stdin);
@@ -207,7 +211,7 @@ async function runFileToWhisperStdin(sourcePath, timestamp, options) {
     'pipe:1'
   ]);
   emitProgress(options, 'transcribe', 5, 'Transcribing audio');
-  const whisper = spawnWhisperForInput('-', timestamp);
+  const whisper = await spawnOpenAIWhisperForInput('-', timestamp);
 
   ffmpeg.stdout.pipe(whisper.stdin);
 
@@ -218,26 +222,45 @@ async function runFileToWhisperStdin(sourcePath, timestamp, options) {
 }
 
 async function transcribeWavFile(wavPath, timestamp, options) {
-  const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+  const engine = getTranscriptionEngine(options);
   emitProgress(options, 'transcribe', 5, 'Transcribing audio');
 
-  if (engine === 'openai') {
+  if (engine === ENGINE_OPENAI_API) {
     const text = await transcribeWithOpenAI(wavPath);
     emitProgress(options, 'transcribe', 100, 'Transcription complete');
     return text;
   }
 
-  await assertCommandAvailable(getWhisperCommand());
-  const whisper = spawnWhisperForInput(wavPath, timestamp);
-  const result = await waitForPipeline([whisper]);
+  const child = engine === ENGINE_MLX_WHISPER
+    ? await spawnMlxWhisperForInput(wavPath, timestamp)
+    : await spawnOpenAIWhisperForInput(wavPath, timestamp);
+
+  const result = await waitForPipeline([child]);
   emitProgress(options, 'transcribe', 100, 'Transcription complete');
   return readWhisperResult(result, timestamp);
 }
 
-function spawnWhisperForInput(input, timestamp) {
+async function spawnOpenAIWhisperForInput(input, timestamp) {
+  await assertCommandAvailable(getWhisperCommand());
   const command = getWhisperCommand();
   const outputDir = path.join(TMP_DIR, `whisper-${timestamp}`);
   const rawArgs = process.env.WHISPER_ARGS || '{input} --model base --output_format txt --output_dir {outputDir}';
+  const args = rawArgs
+    .split(' ')
+    .filter(Boolean)
+    .map((arg) => arg.replaceAll('{input}', input).replaceAll('{outputDir}', outputDir));
+
+  return spawnLogged(command, args, { captureStdout: true, extra: { outputDir } });
+}
+
+async function spawnMlxWhisperForInput(input, timestamp) {
+  await assertCommandAvailable(getMlxWhisperCommand());
+  const command = getMlxWhisperCommand();
+  const outputDir = path.join(TMP_DIR, `mlx-whisper-${timestamp}`);
+  await mkdir(outputDir, { recursive: true });
+
+  const rawArgs = process.env.MLX_WHISPER_ARGS
+    || '{input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}';
   const args = rawArgs
     .split(' ')
     .filter(Boolean)
@@ -262,12 +285,18 @@ async function transcribeWithOpenAI(wavPath) {
 
 async function finalizeTranscript(rawText, outputPath, meta, options) {
   emitProgress(options, 'postprocess', 10, 'Post-processing transcript');
-  const text = postProcessTranscript(rawText);
-  await writeFile(outputPath, text, 'utf8');
+  const rawTranscript = normalizeRawTranscript(rawText);
+  const cleanTranscript = postProcessTranscript(rawTranscript);
+  const summary = summarizeTranscript(cleanTranscript);
+  const fileText = formatTranscriptFile({ summary, cleanTranscript, rawTranscript });
+  await writeFile(outputPath, fileText, 'utf8');
   emitProgress(options, 'postprocess', 100, 'Transcript saved');
 
   return {
-    text,
+    text: cleanTranscript,
+    rawText: rawTranscript,
+    cleanText: cleanTranscript,
+    summary,
     outputPath,
     source: meta.source,
     engine: meta.engine
@@ -329,6 +358,16 @@ function getWhisperCommand() {
   return process.env.WHISPER_COMMAND || 'whisper';
 }
 
+function getMlxWhisperCommand() {
+  return process.env.MLX_WHISPER_COMMAND || 'mlx_whisper';
+}
+
+function getTranscriptionEngine(options = {}) {
+  const engine = options.engine || process.env.TRANSCRIPTION_ENGINE || ENGINE_OPENAI_WHISPER;
+  if (engine === 'local-file') return ENGINE_OPENAI_WHISPER;
+  return engine;
+}
+
 function spawnLogged(command, args, options = {}) {
   const child = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -381,6 +420,7 @@ function buildChildEnv() {
     path.dirname(getYtDlpCommand()),
     path.dirname(getFfmpegCommand()),
     path.dirname(getWhisperCommand()),
+    path.dirname(getMlxWhisperCommand()),
     process.env.PATH || ''
   ].filter(Boolean);
 
@@ -436,4 +476,24 @@ function safeFileName(fileName) {
     .basename(fileName)
     .replace(/[^\w.-]+/g, '_')
     .replace(/^_+/, '') || `upload-${timestampForFile()}`;
+}
+
+function normalizeRawTranscript(rawText) {
+  return String(rawText || '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+}
+
+function formatTranscriptFile({ summary, cleanTranscript, rawTranscript }) {
+  return [
+    '# Summary',
+    summary || 'No summary available.',
+    '',
+    '# Clean Transcript',
+    cleanTranscript || 'No clean transcript available.',
+    '',
+    '# Raw Transcript',
+    rawTranscript || 'No raw transcript available.',
+    ''
+  ].join('\n');
 }
