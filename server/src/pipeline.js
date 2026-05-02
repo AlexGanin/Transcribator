@@ -1,0 +1,367 @@
+import { spawn } from 'node:child_process';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pipeline as streamPipeline } from 'node:stream/promises';
+import { once } from 'node:events';
+import OpenAI from 'openai';
+import { postProcessTranscript } from './postProcess.js';
+
+const ROOT_DIR = path.resolve(process.cwd(), '..');
+const SOURCE_DIR = path.join(ROOT_DIR, 'source');
+const OUTPUT_DIR = path.join(ROOT_DIR, 'output');
+const TMP_DIR = path.join(ROOT_DIR, 'tmp');
+const DEFAULT_TIMEOUT_MS = Number(process.env.TRANSCRIBE_TIMEOUT_MS || 15 * 60 * 1000);
+
+export async function ensureRuntimeDirs() {
+  await Promise.all([
+    mkdir(SOURCE_DIR, { recursive: true }),
+    mkdir(OUTPUT_DIR, { recursive: true }),
+    mkdir(TMP_DIR, { recursive: true })
+  ]);
+}
+
+export async function transcribeUrl(inputUrl) {
+  if (!inputUrl || typeof inputUrl !== 'string') {
+    throw createHttpError(400, 'URL is required.');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(inputUrl);
+  } catch {
+    throw createHttpError(400, 'Invalid URL.');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw createHttpError(400, 'Only http and https URLs are supported.');
+  }
+
+  await assertCommandAvailable('yt-dlp');
+  await assertCommandAvailable('ffmpeg');
+
+  return transcribeFromUrlStream(inputUrl);
+}
+
+export async function transcribeFile(file) {
+  if (!file) {
+    throw createHttpError(400, 'Audio or video file is required.');
+  }
+
+  await assertCommandAvailable('ffmpeg');
+  const safeOriginalName = safeFileName(file.originalname || file.filename);
+  const savedSourcePath = path.join(SOURCE_DIR, safeOriginalName);
+  await rm(savedSourcePath, { force: true });
+  await streamPipeline(createReadStream(file.path), createWriteStream(savedSourcePath));
+  await rm(file.path, { force: true });
+
+  return transcribeFromFileStream(savedSourcePath, safeOriginalName);
+}
+
+async function transcribeFromUrlStream(inputUrl) {
+  const timestamp = timestampForFile();
+  const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
+  const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
+  const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+
+  if (engine === 'local-stdin') {
+    await assertCommandAvailable(process.env.WHISPER_COMMAND || 'whisper');
+    const rawText = await runUrlToWhisperStdin(inputUrl, timestamp);
+    return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine });
+  }
+
+  await runUrlToWav(inputUrl, wavPath);
+  const rawText = await transcribeWavFile(wavPath, timestamp);
+  await rm(wavPath, { force: true });
+  return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine });
+}
+
+async function transcribeFromFileStream(sourcePath, originalName) {
+  const timestamp = timestampForFile();
+  const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
+  const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
+  const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+
+  if (engine === 'local-stdin') {
+    await assertCommandAvailable(process.env.WHISPER_COMMAND || 'whisper');
+    const rawText = await runFileToWhisperStdin(sourcePath, timestamp);
+    return finalizeTranscript(rawText, outputPath, { source: originalName, engine });
+  }
+
+  await runFileToWav(sourcePath, wavPath);
+  const rawText = await transcribeWavFile(wavPath, timestamp);
+  await rm(wavPath, { force: true });
+  return finalizeTranscript(rawText, outputPath, { source: originalName, engine });
+}
+
+async function runUrlToWav(inputUrl, wavPath) {
+  const ytdlp = spawnLogged('yt-dlp', ['-f', 'bestaudio', '-o', '-', inputUrl]);
+  const ffmpeg = spawnLogged('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'warning',
+    '-i',
+    'pipe:0',
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-f',
+    'wav',
+    'pipe:1'
+  ]);
+
+  ytdlp.stdout.pipe(ffmpeg.stdin);
+  const writer = createWriteStream(wavPath);
+  ffmpeg.stdout.pipe(writer);
+
+  await waitForPipeline([ytdlp, ffmpeg], writer);
+}
+
+async function runFileToWav(sourcePath, wavPath) {
+  const ffmpeg = spawnLogged('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'warning',
+    '-i',
+    sourcePath,
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-f',
+    'wav',
+    'pipe:1'
+  ]);
+
+  const writer = createWriteStream(wavPath);
+  ffmpeg.stdout.pipe(writer);
+  await waitForPipeline([ffmpeg], writer);
+}
+
+async function runUrlToWhisperStdin(inputUrl, timestamp) {
+  const ytdlp = spawnLogged('yt-dlp', ['-f', 'bestaudio', '-o', '-', inputUrl]);
+  const ffmpeg = spawnLogged('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'warning',
+    '-i',
+    'pipe:0',
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-f',
+    'wav',
+    'pipe:1'
+  ]);
+  const whisper = spawnWhisperForInput('-', timestamp);
+
+  ytdlp.stdout.pipe(ffmpeg.stdin);
+  ffmpeg.stdout.pipe(whisper.stdin);
+
+  const result = await waitForPipeline([ytdlp, ffmpeg, whisper]);
+  return readWhisperResult(result, timestamp);
+}
+
+async function runFileToWhisperStdin(sourcePath, timestamp) {
+  const ffmpeg = spawnLogged('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'warning',
+    '-i',
+    sourcePath,
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-f',
+    'wav',
+    'pipe:1'
+  ]);
+  const whisper = spawnWhisperForInput('-', timestamp);
+
+  ffmpeg.stdout.pipe(whisper.stdin);
+
+  const result = await waitForPipeline([ffmpeg, whisper]);
+  return readWhisperResult(result, timestamp);
+}
+
+async function transcribeWavFile(wavPath, timestamp) {
+  const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
+
+  if (engine === 'openai') {
+    return transcribeWithOpenAI(wavPath);
+  }
+
+  await assertCommandAvailable(process.env.WHISPER_COMMAND || 'whisper');
+  const whisper = spawnWhisperForInput(wavPath, timestamp);
+  const result = await waitForPipeline([whisper]);
+  return readWhisperResult(result, timestamp);
+}
+
+function spawnWhisperForInput(input, timestamp) {
+  const command = process.env.WHISPER_COMMAND || 'whisper';
+  const outputDir = path.join(TMP_DIR, `whisper-${timestamp}`);
+  const rawArgs = process.env.WHISPER_ARGS || '{input} --model base --language auto --output_format txt --output_dir {outputDir}';
+  const args = rawArgs
+    .split(' ')
+    .filter(Boolean)
+    .map((arg) => arg.replaceAll('{input}', input).replaceAll('{outputDir}', outputDir));
+
+  return spawnLogged(command, args, { captureStdout: true, extra: { outputDir } });
+}
+
+async function transcribeWithOpenAI(wavPath) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw createHttpError(500, 'OPENAI_API_KEY is required when TRANSCRIPTION_ENGINE=openai.');
+  }
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const response = await client.audio.transcriptions.create({
+    file: createReadStream(wavPath),
+    model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe'
+  });
+
+  return response.text || '';
+}
+
+async function finalizeTranscript(rawText, outputPath, meta) {
+  const text = postProcessTranscript(rawText);
+  await writeFile(outputPath, text, 'utf8');
+
+  return {
+    text,
+    outputPath,
+    source: meta.source,
+    engine: meta.engine
+  };
+}
+
+async function readWhisperResult(result, timestamp) {
+  const whisper = result.processes.find((processInfo) => processInfo.extra?.outputDir);
+  const outputDir = whisper?.extra?.outputDir;
+
+  if (outputDir) {
+    const candidates = await findTextFiles(outputDir);
+    if (candidates.length > 0) {
+      return readFile(candidates[0], 'utf8');
+    }
+  }
+
+  return result.stdout.join('\n').trim();
+}
+
+async function findTextFiles(dir) {
+  try {
+    const names = await readdir(dir);
+    return names
+      .filter((name) => name.endsWith('.txt'))
+      .map((name) => path.join(dir, name));
+  } catch {
+    return [];
+  }
+}
+
+async function assertCommandAvailable(command) {
+  const lookupCommand = process.platform === 'win32' ? 'where' : 'which';
+  const checker = spawn(lookupCommand, [command], { stdio: ['ignore', 'ignore', 'ignore'] });
+
+  const result = await new Promise((resolve) => {
+    checker.once('error', (error) => resolve({ error }));
+    checker.once('close', (code) => resolve({ code }));
+  });
+
+  if (result.error) {
+    throw createHttpError(500, `Required command not found: ${command}. Install it and make sure it is available in PATH.`);
+  }
+
+  if (result.code !== 0) {
+    throw createHttpError(500, `Required command not found: ${command}. Install it and make sure it is available in PATH.`);
+  }
+}
+
+function spawnLogged(command, args, options = {}) {
+  const child = spawn(command, args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: process.env
+  });
+
+  child.meta = {
+    command,
+    args,
+    stderr: [],
+    stdout: options.captureStdout ? [] : undefined,
+    extra: options.extra || {}
+  };
+
+  child.stderr.on('data', (chunk) => {
+    const line = chunk.toString();
+    child.meta.stderr.push(line);
+    process.stderr.write(`[${command}] ${line}`);
+  });
+
+  if (options.captureStdout) {
+    child.stdout.on('data', (chunk) => {
+      child.meta.stdout.push(chunk.toString());
+    });
+  }
+
+  child.on('error', (error) => {
+    child.meta.error = error;
+  });
+
+  return child;
+}
+
+async function waitForPipeline(children, writable) {
+  const timeoutMs = DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => {
+    for (const child of children) {
+      child.kill('SIGTERM');
+    }
+  }, timeoutMs);
+
+  try {
+    const closePromises = children.map(waitForChild);
+    const writerPromise = writable ? once(writable, 'finish') : Promise.resolve();
+    await Promise.all([...closePromises, writerPromise]);
+
+    return {
+      processes: children.map((child) => child.meta),
+      stdout: children.flatMap((child) => child.meta.stdout || [])
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function waitForChild(child) {
+  const [code, signal] = await once(child, 'close');
+  if (code !== 0) {
+    const stderr = child.meta.stderr.join('').trim();
+    const reason = signal ? `signal ${signal}` : `exit code ${code}`;
+    throw createHttpError(500, `${child.meta.command} failed with ${reason}.${stderr ? ` stderr: ${stderr}` : ''}`);
+  }
+}
+
+function createHttpError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function timestampForFile() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function safeFileName(fileName) {
+  return path
+    .basename(fileName)
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+/, '') || `upload-${timestampForFile()}`;
+}
