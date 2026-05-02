@@ -37,8 +37,8 @@ export async function transcribeUrl(inputUrl) {
     throw createHttpError(400, 'Only http and https URLs are supported.');
   }
 
-  await assertCommandAvailable('yt-dlp');
-  await assertCommandAvailable('ffmpeg');
+  await assertCommandAvailable(getYtDlpCommand());
+  await assertCommandAvailable(getFfmpegCommand());
 
   return transcribeFromUrlStream(inputUrl);
 }
@@ -48,7 +48,7 @@ export async function transcribeFile(file) {
     throw createHttpError(400, 'Audio or video file is required.');
   }
 
-  await assertCommandAvailable('ffmpeg');
+  await assertCommandAvailable(getFfmpegCommand());
   const safeOriginalName = safeFileName(file.originalname || file.filename);
   const savedSourcePath = path.join(SOURCE_DIR, safeOriginalName);
   await rm(savedSourcePath, { force: true });
@@ -65,7 +65,7 @@ async function transcribeFromUrlStream(inputUrl) {
   const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
 
   if (engine === 'local-stdin') {
-    await assertCommandAvailable(process.env.WHISPER_COMMAND || 'whisper');
+    await assertCommandAvailable(getWhisperCommand());
     const rawText = await runUrlToWhisperStdin(inputUrl, timestamp);
     return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine });
   }
@@ -83,7 +83,7 @@ async function transcribeFromFileStream(sourcePath, originalName) {
   const engine = process.env.TRANSCRIPTION_ENGINE || 'local-file';
 
   if (engine === 'local-stdin') {
-    await assertCommandAvailable(process.env.WHISPER_COMMAND || 'whisper');
+    await assertCommandAvailable(getWhisperCommand());
     const rawText = await runFileToWhisperStdin(sourcePath, timestamp);
     return finalizeTranscript(rawText, outputPath, { source: originalName, engine });
   }
@@ -95,8 +95,8 @@ async function transcribeFromFileStream(sourcePath, originalName) {
 }
 
 async function runUrlToWav(inputUrl, wavPath) {
-  const ytdlp = spawnLogged('yt-dlp', ['-f', 'bestaudio', '-o', '-', inputUrl]);
-  const ffmpeg = spawnLogged('ffmpeg', [
+  const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl]);
+  const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
     'warning',
@@ -120,7 +120,7 @@ async function runUrlToWav(inputUrl, wavPath) {
 }
 
 async function runFileToWav(sourcePath, wavPath) {
-  const ffmpeg = spawnLogged('ffmpeg', [
+  const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
     'warning',
@@ -142,8 +142,8 @@ async function runFileToWav(sourcePath, wavPath) {
 }
 
 async function runUrlToWhisperStdin(inputUrl, timestamp) {
-  const ytdlp = spawnLogged('yt-dlp', ['-f', 'bestaudio', '-o', '-', inputUrl]);
-  const ffmpeg = spawnLogged('ffmpeg', [
+  const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl]);
+  const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
     'warning',
@@ -168,7 +168,7 @@ async function runUrlToWhisperStdin(inputUrl, timestamp) {
 }
 
 async function runFileToWhisperStdin(sourcePath, timestamp) {
-  const ffmpeg = spawnLogged('ffmpeg', [
+  const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
     '-loglevel',
     'warning',
@@ -198,14 +198,14 @@ async function transcribeWavFile(wavPath, timestamp) {
     return transcribeWithOpenAI(wavPath);
   }
 
-  await assertCommandAvailable(process.env.WHISPER_COMMAND || 'whisper');
+  await assertCommandAvailable(getWhisperCommand());
   const whisper = spawnWhisperForInput(wavPath, timestamp);
   const result = await waitForPipeline([whisper]);
   return readWhisperResult(result, timestamp);
 }
 
 function spawnWhisperForInput(input, timestamp) {
-  const command = process.env.WHISPER_COMMAND || 'whisper';
+  const command = getWhisperCommand();
   const outputDir = path.join(TMP_DIR, `whisper-${timestamp}`);
   const rawArgs = process.env.WHISPER_ARGS || '{input} --model base --language auto --output_format txt --output_dir {outputDir}';
   const args = rawArgs
@@ -283,6 +283,18 @@ async function assertCommandAvailable(command) {
   if (result.code !== 0) {
     throw createHttpError(500, `Required command not found: ${command}. Install it and make sure it is available in PATH.`);
   }
+}
+
+function getYtDlpCommand() {
+  return process.env.YTDLP_COMMAND || 'yt-dlp';
+}
+
+function getFfmpegCommand() {
+  return process.env.FFMPEG_COMMAND || 'ffmpeg';
+}
+
+function getWhisperCommand() {
+  return process.env.WHISPER_COMMAND || 'whisper';
 }
 
 function spawnLogged(command, args, options = {}) {
