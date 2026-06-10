@@ -9,6 +9,7 @@ Minimal React + Node.js project for transcribing audio from YouTube links, gener
 - URL pipeline: `yt-dlp stdout -> ffmpeg stdin`, then Whisper.
 - File pipeline: uploaded file is saved to `/source/<original_filename>`, then streamed through `ffmpeg`.
 - Results are post-processed and saved to `/output/<timestamp>.txt`.
+- Local upload limit defaults to 10 GiB and can be changed with `MAX_UPLOAD_SIZE_GB`.
 
 ## Important Whisper Note
 

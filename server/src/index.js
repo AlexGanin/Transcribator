@@ -11,6 +11,8 @@ const app = express();
 const port = Number(process.env.PORT || 3001);
 const host = process.env.HOST || '127.0.0.1';
 const uploadDir = path.resolve(process.cwd(), '..', 'tmp', 'uploads');
+const maxUploadSizeGb = parsePositiveNumberEnv('MAX_UPLOAD_SIZE_GB', 10);
+const maxUploadSizeBytes = Math.floor(maxUploadSizeGb * 1024 ** 3);
 
 await ensureRuntimeDirs();
 await mkdir(uploadDir, { recursive: true });
@@ -18,7 +20,7 @@ await mkdir(uploadDir, { recursive: true });
 const upload = multer({
   dest: uploadDir,
   limits: {
-    fileSize: 1024 * 1024 * 1024
+    fileSize: maxUploadSizeBytes
   }
 });
 
@@ -100,6 +102,13 @@ app.get('/transcribe/jobs/:id/events', (req, res) => {
 });
 
 app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({
+      error: `File too large. Max upload size is ${formatBytes(maxUploadSizeBytes)}.`
+    });
+    return;
+  }
+
   console.error(error);
   res.status(error.statusCode || 500).json({
     error: error.message || 'Unexpected server error.'
@@ -108,4 +117,15 @@ app.use((error, req, res, next) => {
 
 app.listen(port, host, () => {
   console.log(`Transcribator server is running on http://${host}:${port}`);
+  console.log(`Max upload size is ${formatBytes(maxUploadSizeBytes)}.`);
 });
+
+function parsePositiveNumberEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function formatBytes(bytes) {
+  const gb = bytes / 1024 ** 3;
+  return `${Number(gb.toFixed(2))} GiB`;
+}
