@@ -175,6 +175,16 @@ project-root
   README.md
 ```
 
+## Agent Documentation
+
+Agent-facing project knowledge lives in `docs/agent/`.
+
+- `docs/agent/README.md` is the entry point.
+- `docs/agent/PROJECT_MAP.md` maps files, responsibilities and data flow.
+- `docs/agent/INFRASTRUCTURE.md` documents ports, commands, env vars and runtime paths.
+- `docs/agent/WORKFLOW.md` documents how agents should inspect, edit, verify and log changes.
+- `docs/agent/CHANGELOG.md` tracks agent-visible project knowledge changes.
+
 ## Error Handling
 
 The server checks for required commands before running the pipeline:
