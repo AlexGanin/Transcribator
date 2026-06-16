@@ -5,21 +5,23 @@ Read it before making non-trivial changes, and keep it current after every meani
 
 ## Start Here
 
-- `PROJECT_MAP.md` explains the repository layout, file ownership, and runtime data flow.
-- `INFRASTRUCTURE.md` explains ports, commands, environment variables, external tools, and runtime directories.
-- `WORKFLOW.md` explains how agents should inspect, edit, verify, document, and commit work.
+- `PROJECT_MAP.md` explains repository layout, file ownership and runtime data flow.
+- `INFRASTRUCTURE.md` explains ports, commands, environment variables, external tools and runtime directories.
+- `WORKFLOW.md` explains how agents should inspect, edit, verify, document and commit work.
 - `CHANGELOG.md` is the agent-facing log of structural and behavioral changes.
 
 ## Project Summary
 
-Transcribator is a local transcription app with two running parts:
+Transcribator is now a pnpm workspace:
 
-- `client/`: React + Vite browser UI on `http://localhost:3002`.
-- `server/`: Express API on `http://localhost:3001`.
+- `apps/api`: Express API on `http://localhost:3001`.
+- `apps/crm`: Next.js CRM on `http://localhost:3002`.
+- `apps/extension`: WXT React Manifest V3 extension.
+- `packages/shared`: Zod contracts and shared DTO types.
+- `packages/api-client`: fetch client used by browser surfaces.
+- `packages/ui`: shared shadcn-style React UI components.
 
-The backend transcribes URL or uploaded media through external tools such as `yt-dlp`, `ffmpeg`,
-`whisper`, `mlx_whisper`, or the OpenAI Audio Transcriptions API. Runtime files are written under
-`source/`, `tmp/`, and `output/`.
+The Express API remains the owner of media work: `yt-dlp`, `ffmpeg`, Whisper engines, uploads, SSE progress, history and video downloads. Runtime files stay in root-level `source/`, `tmp/`, `output/` and `downloads/`.
 
 ## Documentation Update Rule
 

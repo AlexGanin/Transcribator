@@ -2,15 +2,16 @@
   "name": "transcribator",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal React + Node.js audio transcription app using yt-dlp, ffmpeg and Whisper.",
+  "description": "pnpm workspace for the Transcribator Express API, Next.js CRM and Chrome extension.",
+  "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "install:all": "npm install --prefix server && npm install --prefix client",
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "start": "npm run start --prefix server",
-    "check": "npm run check --prefix server && npm run build --prefix client"
+    "dev": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && concurrently \"pnpm --filter @transcribator/api dev\" \"pnpm --filter @transcribator/crm dev\"",
+    "build": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && pnpm --filter @transcribator/api build && pnpm --filter @transcribator/crm build && pnpm --filter @transcribator/extension build",
+    "typecheck": "pnpm --filter @transcribator/shared typecheck && pnpm --filter @transcribator/api-client typecheck && pnpm --filter @transcribator/ui typecheck && pnpm --filter @transcribator/api typecheck && pnpm --filter @transcribator/crm typecheck && pnpm --filter @transcribator/extension typecheck",
+    "check": "pnpm --filter @transcribator/shared check && pnpm --filter @transcribator/api-client check && pnpm --filter @transcribator/ui check && pnpm --filter @transcribator/api check && pnpm --filter @transcribator/crm check && pnpm --filter @transcribator/extension check"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

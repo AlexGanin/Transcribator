@@ -27,8 +27,12 @@ rg -n "term-to-find" .
 ## Editing Rules
 
 - Keep changes scoped to the user request.
-- Do not commit generated files such as `client/dist/`, `.next/`, `source/*`, `tmp/*`, or `output/*`.
-- Keep `server/.env` local-only.
+- Keep Express business logic in `apps/api`; do not move media work into Next route handlers.
+- Keep shared contracts in `packages/shared` and use Zod for runtime API validation.
+- Keep browser API calls in `packages/api-client`; do not add React, Next, Chrome or Node-specific APIs there.
+- Keep shared UI in `packages/ui`; do not add Next, Chrome or Node-specific APIs there.
+- Do not commit generated files such as `.next/`, `.wxt/`, package `dist/`, `source/*`, `tmp/*`, `output/*`, or `downloads/*`.
+- Keep `.env` files local-only.
 - Preserve current runtime behavior unless the user explicitly asks to change it.
 - Prefer small files with clear ownership when adding new code.
 - Update agent docs in the same change as the behavior they describe.
@@ -39,11 +43,13 @@ Use the smallest verification that proves the change, then run broader checks fo
 
 | Change Type | Required Verification |
 | --- | --- |
-| Server JS behavior | `npm run test --prefix server` and `npm run check --prefix server` |
-| Client UI or package changes | `npm run build --prefix client` |
-| Root script or cross-component change | `npm run check` |
+| API JS behavior | `pnpm --filter @transcribator/api check` |
+| Shared contract or API client change | `pnpm --filter @transcribator/shared check` and `pnpm --filter @transcribator/api-client check` |
+| CRM UI change | `pnpm --filter @transcribator/crm check` |
+| Extension change | `pnpm --filter @transcribator/extension check` |
+| Root script or cross-workspace change | `pnpm check` |
 | Documentation-only change | `git diff --check` plus read the changed docs |
-| Port or startup change | `npm run dev`, confirm ports, then stop the test run |
+| Port or startup change | `pnpm dev`, confirm ports, then stop the run unless asked to keep it running |
 
 Always run:
 
@@ -85,16 +91,19 @@ Do not include unrelated user changes or generated artifacts in commits.
 ## Known Good Commands
 
 ```sh
-npm run check
+pnpm install
+pnpm typecheck
+pnpm build
+pnpm check
 git diff --check
 ```
 
-For local smoke testing:
+For local smoke checking:
 
 ```sh
-npm run dev
-curl -sS -I http://127.0.0.1:3002/
+pnpm dev
 curl -sS http://127.0.0.1:3001/health
+curl -sS -I http://127.0.0.1:3002/
 ```
 
-Stop the dev server after smoke testing unless the user asked to keep it running.
+Stop the dev server after smoke checking unless the user asked to keep it running.

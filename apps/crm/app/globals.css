@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@source "../app/**/*.{ts,tsx}";
+@source "../src/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+:root {
+  color-scheme: light;
+  background: #f4f6f5;
+  color: #18181b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(236, 245, 241, 0.9), rgba(244, 246, 245, 0) 260px),
+    #f4f6f5;
+  color: #18181b;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

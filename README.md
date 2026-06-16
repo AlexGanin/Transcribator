@@ -1,54 +1,98 @@
 # Transcribator
 
-Minimal React + Node.js project for transcribing audio from YouTube links, generic audio/video URLs and local uploads.
+Local pnpm workspace for transcribing media, tracking transcription history and downloading YouTube videos.
 
 ## What It Does
 
-- Frontend: React + Vite UI with URL input, file upload, button and result textarea.
-- Backend: Express API with `POST /transcribe/url` and `POST /transcribe/file`.
-- Video downloader: paste a YouTube URL, choose an available format and save the video to `/downloads`.
-- URL pipeline: `yt-dlp stdout -> ffmpeg stdin`, then Whisper.
-- File pipeline: uploaded file is saved to `/source/<original_filename>`, then streamed through `ffmpeg`.
-- Results are post-processed and saved to `/output/<timestamp>.txt`.
-- Local upload limit defaults to 10 GiB and can be changed with `MAX_UPLOAD_SIZE_GB`.
+- `apps/crm`: Next.js App Router CRM at `http://localhost:3002`.
+- `apps/api`: Express API at `http://localhost:3001`.
+- `apps/extension`: Chrome extension scaffold built with WXT, React and Manifest V3.
+- `packages/shared`: Zod API contracts, DTOs and shared types.
+- `packages/api-client`: fetch-based client used by the CRM and extension.
+- `packages/ui`: shadcn-style React UI primitives built on Tailwind and Radix.
 
-## Important Whisper Note
+The Express API owns the transcription and video logic: `yt-dlp`, `ffmpeg`, Whisper engines, uploads, Server-Sent Events, history and downloads.
 
-The requested ideal pipeline is:
+## System Requirements
+
+- Node.js `^20.19.0` or `>=22.12.0`
+- pnpm through Corepack
+- `yt-dlp`
+- `ffmpeg`
+- A local Whisper CLI, MLX Whisper, or OpenAI API credentials
+
+Common macOS setup:
 
 ```sh
-yt-dlp -f bestaudio -o - <URL> | ffmpeg -i pipe:0 -f wav pipe:1 | whisper
+brew install yt-dlp ffmpeg
+pipx install openai-whisper
+pipx install mlx-whisper
 ```
 
-`yt-dlp -> ffmpeg` is implemented as real Node.js streams with `child_process.spawn`.
+## Install
 
-Most common local Whisper CLIs, including the Python `openai-whisper` command, do **not** reliably accept WAV data from stdin. Because of that, the default runnable mode streams ffmpeg output into a temporary WAV file and then passes the file path to Whisper. No audio is buffered fully in Node.js memory.
-
-If your Whisper engine supports stdin, set:
-
-```env
-TRANSCRIPTION_ENGINE=local-stdin
-WHISPER_COMMAND=whisper-cli
-WHISPER_ARGS=-f - -otxt
+```sh
+corepack enable
+pnpm install
+cp apps/api/.env.example apps/api/.env
 ```
 
-Then the backend connects:
+Edit `apps/api/.env` if your local command paths or Whisper arguments are different.
+
+## Run
+
+```sh
+pnpm dev
+```
+
+Open:
 
 ```txt
-yt-dlp stdout -> ffmpeg stdin -> ffmpeg stdout -> whisper stdin
+http://localhost:3002
+```
+
+API:
+
+```txt
+http://localhost:3001
+```
+
+Runtime files are written to root-level folders:
+
+- `source/`: uploaded source media copies
+- `tmp/`: uploads, WAV files and Whisper output folders
+- `output/`: transcripts and `history.json`
+- `downloads/`: downloaded videos
+
+## Commands
+
+Only these command categories are used:
+
+```sh
+pnpm dev
+pnpm build
+pnpm typecheck
+pnpm check
+```
+
+Run an individual workspace package with `--filter`, for example:
+
+```sh
+pnpm --filter @transcribator/api dev
+pnpm --filter @transcribator/crm dev
+pnpm --filter @transcribator/extension dev
 ```
 
 ## Transcription Engines
 
-The UI has a `Transcription engine` selector. The backend receives the selected engine per request, so you can switch implementations without changing the pipeline code.
-
-Available engines:
+The CRM and extension send the selected engine per request. Supported values are defined in `packages/shared`:
 
 - `mlx-whisper`: local MLX Whisper for Apple Silicon GPU/Metal acceleration.
-- `openai-whisper`: local OpenAI Whisper CLI. This is the original CPU-oriented fallback.
+- `openai-whisper`: local OpenAI Whisper CLI.
 - `openai`: OpenAI Audio Transcriptions API.
+- `local-stdin`: stdin-capable local Whisper command.
 
-Local `.env` example:
+Example `apps/api/.env` values:
 
 ```env
 TRANSCRIPTION_ENGINE=openai-whisper
@@ -59,42 +103,7 @@ MLX_WHISPER_COMMAND=/Users/your-user/.local/bin/mlx_whisper
 MLX_WHISPER_ARGS={input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}
 ```
 
-Install MLX Whisper:
-
-```sh
-pipx install mlx-whisper
-```
-
-MLX Whisper needs an Apple Silicon Mac with accessible Metal GPU. If it is launched from a headless, sandboxed or virtualized session, it may fail with `No Metal device available`; in that case, run the dev server from a normal macOS terminal session.
-
-## System Requirements
-
-Install these system tools and make sure they are available in `PATH`:
-
-- Node.js `^20.19.0` or `>=22.12.0` (required by the current Vite dependency)
-- `yt-dlp`
-- `ffmpeg`
-- Local Whisper CLI, for example `whisper`, `whisper-cli` or another compatible command
-
-Examples:
-
-```sh
-brew install yt-dlp ffmpeg
-```
-
-For local Whisper, choose one:
-
-```sh
-pipx install openai-whisper
-```
-
-or install/build `whisper.cpp` and expose its CLI as `whisper-cli`.
-
-Python is not used by this Node.js app directly. It may be required by the external `openai-whisper` CLI.
-
-## Optional OpenAI Fallback
-
-If local Whisper is not available, you can use OpenAI Audio Transcriptions:
+For OpenAI API fallback:
 
 ```env
 TRANSCRIPTION_ENGINE=openai
@@ -102,139 +111,36 @@ OPENAI_API_KEY=sk-...
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 ```
 
-This fallback sends the temporary WAV file to the OpenAI API. It is not a pure local transcription path.
-
-## Install
-
-```sh
-npm install
-npm run install:all
-cp server/.env.example server/.env
-```
-
-Edit `server/.env` if your Whisper command or args are different.
-
-## Run
-
-```sh
-npm run dev
-```
-
-Open:
-
-```txt
-http://localhost:3002
-```
-
-Backend:
-
-```txt
-http://localhost:3001
-```
-
-Downloaded videos are saved to:
-
-```txt
-downloads/
-```
-
 ## API
 
-### `POST /transcribe/url`
+All request and response contracts live in `packages/shared`.
 
-Body:
-
-```json
-{
-  "url": "https://www.youtube.com/watch?v=..."
-}
-```
-
-### `POST /transcribe/file`
-
-Multipart form-data:
-
-```txt
-file=<audio_or_video_file>
-```
-
-### `POST /videos/formats`
-
-Body:
-
-```json
-{
-  "url": "https://www.youtube.com/watch?v=..."
-}
-```
-
-Returns available video formats for the URL.
-
-### `POST /videos/download`
-
-Body:
-
-```json
-{
-  "url": "https://www.youtube.com/watch?v=...",
-  "formatId": "18"
-}
-```
-
-Downloads the selected format to `downloads/`.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | API health |
+| `POST` | `/transcribe/url` | Start URL transcription |
+| `POST` | `/transcribe/file` | Start uploaded file transcription |
+| `GET` | `/transcribe/history` | Read saved history |
+| `GET` | `/transcribe/jobs/:id/events` | SSE progress stream |
+| `POST` | `/videos/formats` | List available video formats |
+| `POST` | `/videos/download` | Download selected format to `downloads/` |
 
 ## Project Structure
 
 ```txt
-project-root
-  client
-    src
-      main.jsx
-      styles.css
-    index.html
-    package.json
-  server
-    src
-      index.js
-      pipeline.js
-      postProcess.js
-    .env.example
-    package.json
-  source
-  output
-  tmp
-  downloads
-  package.json
-  README.md
+apps/
+  api/          Express API and media pipeline
+  crm/          Next.js CRM UI
+  extension/    WXT React Chrome extension
+packages/
+  api-client/   fetch client for API calls
+  shared/       Zod schemas and shared types
+  ui/           shared shadcn-style UI components
+source/
+tmp/
+output/
+downloads/
+docs/agent/
 ```
 
-## Agent Documentation
-
 Agent-facing project knowledge lives in `docs/agent/`.
-
-- `docs/agent/README.md` is the entry point.
-- `docs/agent/PROJECT_MAP.md` maps files, responsibilities and data flow.
-- `docs/agent/INFRASTRUCTURE.md` documents ports, commands, env vars and runtime paths.
-- `docs/agent/WORKFLOW.md` documents how agents should inspect, edit, verify and log changes.
-- `docs/agent/CHANGELOG.md` tracks agent-visible project knowledge changes.
-
-## Error Handling
-
-The server checks for required commands before running the pipeline:
-
-- URL transcription requires `yt-dlp` and `ffmpeg`.
-- File transcription requires `ffmpeg`.
-- Local Whisper mode requires `WHISPER_COMMAND`.
-
-Pipeline stderr is logged and included in server errors. Long-running jobs are killed after `TRANSCRIBE_TIMEOUT_MS`, which defaults to 15 minutes.
-
-## Post-processing
-
-The included post-processing is a simple local heuristic:
-
-- removes common noise tags like `[music]`
-- collapses repeated words
-- normalizes spacing and punctuation
-- groups text into short paragraphs
-
-LLM post-processing is intentionally not enabled by default. It can be added as an optional step after transcription if you want higher-quality punctuation and correction.

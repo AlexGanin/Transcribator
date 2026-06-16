@@ -1,217 +1,213 @@
 # Project Map
 
-This file maps the current repository structure and the responsibility of each important file.
+This file maps the current repository structure and the responsibility of each important area.
 
 ## Top-Level Layout
 
 ```txt
 Transcribator
-  client/              React + Vite browser UI
-  server/              Express API and transcription pipeline
-  source/              Runtime copy of uploaded source files
-  tmp/                 Runtime temporary uploads, WAV files, and CLI output folders
-  output/              Runtime transcript files and history.json
-  downloads/           Runtime downloaded YouTube videos
-  docs/agent/          Agent-facing project documentation
-  package.json         Root orchestration scripts
-  package-lock.json    Root dependency lockfile for orchestration dependencies
-  README.md            Human-facing setup and usage guide
+  apps/
+    api/          Express API and transcription/video pipeline
+    crm/          Next.js App Router CRM
+    extension/    WXT React Chrome extension
+  packages/
+    api-client/   fetch-based API client
+    shared/       Zod schemas, DTOs and shared types
+    ui/           shared shadcn-style React components
+  source/         Runtime copy of uploaded source files
+  tmp/            Runtime temporary uploads, WAV files and CLI output folders
+  output/         Runtime transcript files and history.json
+  downloads/      Runtime downloaded YouTube videos
+  docs/agent/     Agent-facing project documentation
+  package.json    Root pnpm workspace commands
+  pnpm-lock.yaml  Workspace lockfile
 ```
 
 ## Root Files
 
 - `package.json`
-  - Owns root commands.
-  - `npm run dev` starts server and client concurrently.
-  - `npm run install:all` installs dependencies for `server/` and `client/`.
-  - `npm run check` runs server syntax checks and client production build.
+  - Owns root `dev`, `build`, `typecheck` and `check` commands.
+  - Starts the Express API and Next CRM together for local development.
 
-- `package-lock.json`
-  - Locks the root dependency graph.
-  - Currently needed for `concurrently`.
+- `pnpm-workspace.yaml`
+  - Includes `apps/*` and `packages/*`.
+
+- `tsconfig.base.json`
+  - Shared strict TypeScript defaults for new apps and packages.
 
 - `.gitignore`
-  - Ignores dependency folders and runtime output under `downloads/`, `source/`, `output/`, and `tmp/`.
-  - Ignores local Next.js artifacts under `.next/`.
-  - Keeps `.gitkeep` files so runtime directories exist in a fresh checkout.
+  - Ignores dependency folders, Next/WXT build output, package `dist/` folders and runtime output under `downloads/`, `source/`, `output/`, and `tmp/`.
 
 - `README.md`
-  - User-facing overview, install, run, API, and pipeline notes.
-  - Should stay concise and link here for agent-facing implementation detail.
+  - Human-facing overview, install, run, API and architecture notes.
 
-## Client
+## Apps
 
-```txt
-client
-  index.html
-  package.json
-  package-lock.json
-  src
-    main.jsx
-    styles.css
-```
-
-- `client/package.json`
-  - Vite app scripts and frontend dependencies.
-  - `npm run dev --prefix client` runs Vite at `127.0.0.1:3002` with `--strictPort`.
-  - `npm run build --prefix client` builds production assets.
-
-- `client/src/main.jsx`
-  - Main React application.
-  - Owns top-level tabs for `Транскрибатор` and `Скачать видео`.
-  - Owns UI state for source mode, URL, selected file, engine, run status, progress stages, result text, and history.
-  - Talks to the API through `API_URL`, defaulting to `http://localhost:3001`.
-  - Opens an `EventSource` for `/transcribe/jobs/:id/events`.
-  - Sends URL requests as JSON and file requests as multipart form data.
-  - Requests video formats from `/videos/formats` and downloads from `/videos/download`.
-
-- `client/src/styles.css`
-  - Global styles for the app shell, form, progress, results, and history.
-  - The current UI is plain CSS, not a component library.
-
-## Server
+### `apps/api`
 
 ```txt
-server
+apps/api
   .env.example
   package.json
-  package-lock.json
   src
     index.js
     jobs.js
     pipeline.js
     postProcess.js
     videoDownload.js
-    videoDownload.test.js
 ```
 
-- `server/package.json`
-  - Express server scripts and dependencies.
-  - `npm run dev --prefix server` and `npm run start --prefix server` both run `node src/index.js`.
-  - `npm run test --prefix server` runs Node test files.
-  - `npm run check --prefix server` runs tests and syntax-checks the server entry and pipeline files.
-
-- `server/.env.example`
-  - Documents server runtime configuration.
-  - Copy to `server/.env` for local secrets and command paths.
-
-- `server/src/index.js`
+- `src/index.js`
   - Express app entry point.
-  - Loads `.env` via `dotenv/config`.
+  - Loads `apps/api/.env`.
   - Binds to `HOST` and `PORT`, defaulting to `127.0.0.1:3001`.
-  - Configures CORS, JSON parsing, multer uploads, route handlers, SSE, and error handling.
-  - Routes:
-    - `GET /health`
-    - `POST /transcribe/url`
-    - `POST /transcribe/file`
-    - `GET /transcribe/history`
-    - `POST /videos/formats`
-    - `POST /videos/download`
-    - `GET /transcribe/jobs/:id/events`
+  - Configures CORS, JSON parsing, multer uploads, route handlers, SSE and error handling.
+  - Validates request bodies with schemas from `@transcribator/shared`.
 
-- `server/src/jobs.js`
+- `src/jobs.js`
   - In-memory job registry and event emitter layer.
-  - Starts transcription tasks asynchronously with `queueMicrotask`.
+  - Starts transcription tasks asynchronously.
   - Stores live events for SSE replay.
-  - Writes run history to `output/history.json`.
-  - Keeps up to 200 history entries.
+  - Writes run history to root `output/history.json`.
 
-- `server/src/pipeline.js`
+- `src/pipeline.js`
   - Core transcription pipeline.
-  - Validates URL and file inputs.
-  - Checks required external commands with `which` or `where`.
-  - Uses Node streams and `child_process.spawn` to run `yt-dlp`, `ffmpeg`, `whisper`, and `mlx_whisper`.
-  - Supports engines:
-    - `mlx-whisper`
-    - `openai-whisper`
-    - `local-stdin`
-    - `openai`
+  - Uses root `source/`, `tmp/` and `output/`.
+  - Runs `yt-dlp`, `ffmpeg`, local Whisper engines or OpenAI Audio Transcriptions.
   - Emits progress stages to `jobs.js`.
-  - Writes final transcript files to `output/<timestamp>.txt`.
 
-- `server/src/postProcess.js`
-  - Local transcript cleanup and simple summary generation.
-  - Removes common noise tokens, normalizes spacing, capitalizes sentences, groups paragraphs, and selects summary sentences.
+- `src/videoDownload.js`
+  - Reads available video formats with `yt-dlp --dump-json`.
+  - Downloads selected formats to root `downloads/`.
 
-- `server/src/videoDownload.js`
-  - Video download helper layer.
-  - Validates video URLs.
-  - Reads available video formats from `yt-dlp --dump-json`.
-  - Normalizes formats for the browser UI.
-  - Downloads selected formats to `downloads/`.
+### `apps/crm`
 
-- `server/src/videoDownload.test.js`
-  - Unit tests for format normalization and safe download filenames.
+```txt
+apps/crm
+  app/
+    globals.css
+    layout.tsx
+    page.tsx
+  src/components/transcribator-app.tsx
+```
+
+- Next.js App Router TypeScript app.
+- Runs at `127.0.0.1:3002`.
+- Uses `@transcribator/api-client` for every API call.
+- Uses `@transcribator/ui` for shared controls.
+- Provides:
+  - URL transcription
+  - file transcription
+  - transcription engine selection
+  - SSE progress
+  - transcription history
+  - video format selection
+  - video downloads
+
+### `apps/extension`
+
+```txt
+apps/extension
+  entrypoints/
+    background.ts
+    content.ts
+    popup/
+      index.html
+      main.tsx
+      popup-app.tsx
+      style.css
+  wxt.config.ts
+```
+
+- WXT + React + TypeScript Manifest V3 extension.
+- Popup uses `@transcribator/api-client`.
+- Background service worker stores extension defaults and the last YouTube URL.
+- YouTube content script uses Shadow DOM style isolation.
+- No remote hosted code is used.
+
+## Packages
+
+### `packages/shared`
+
+- Owns Zod API contracts and `z.infer` types.
+- Includes request schemas, response schemas, progress event schemas, engine enum, job status enum, video format DTOs and API error DTOs.
+- Must not import React, Next, Chrome APIs or Node-only APIs.
+
+### `packages/api-client`
+
+- Pure fetch-based client.
+- Works in the Next CRM, extension popup/background/content scripts and normal browser contexts.
+- Imports and validates against `packages/shared` schemas.
+- Normalizes failed responses into `ApiClientError`.
+- Must not import React, TanStack Query, Next APIs, Chrome APIs or Node-only APIs.
+
+### `packages/ui`
+
+- Shared React components styled with Tailwind classes and Radix primitives.
+- Includes Button, Input, Textarea, Select, Tabs, Progress, Badge and Card primitives.
+- Must stay framework-agnostic: no Next APIs, Chrome APIs or Node APIs.
 
 ## Runtime Directories
 
-- `source/`
-  - Receives a safe-name copy of uploaded source files.
-  - Contents are ignored by git except `.gitkeep`.
+- `source/`: safe-name copies of uploaded source files.
+- `tmp/`: multer uploads, generated WAV files and Whisper output folders.
+- `output/`: final transcript `.txt` files and `history.json`.
+- `downloads/`: downloaded YouTube videos.
 
-- `tmp/`
-  - Receives multer uploads, temporary WAV files, and Whisper output folders.
-  - Contents are ignored by git except `.gitkeep`.
-
-- `output/`
-  - Receives final transcript `.txt` files and `history.json`.
-  - Contents are ignored by git except `.gitkeep`.
-
-- `downloads/`
-  - Receives downloaded YouTube videos.
-  - Contents are ignored by git except `.gitkeep`.
+Only `.gitkeep` files should be committed from these directories.
 
 ## Data Flow
 
 ### URL Transcription
 
 ```txt
-Browser form
+CRM or extension
+  -> packages/api-client
   -> POST /transcribe/url
+  -> shared Zod validation
   -> jobs.createJob
   -> pipeline.transcribeUrl
   -> yt-dlp stdout
   -> ffmpeg stdin/stdout
-  -> temp WAV or whisper stdin
   -> selected transcription engine
   -> postProcessTranscript + summarizeTranscript
   -> output/<timestamp>.txt
   -> output/history.json
   -> SSE progress/done events
-  -> Browser result panes and history
+  -> CRM result panes and history
 ```
 
 ### File Transcription
 
 ```txt
-Browser multipart upload
+CRM multipart upload
+  -> packages/api-client
   -> POST /transcribe/file
+  -> shared Zod validation for form fields
   -> multer temp upload
   -> source/<safe_original_filename>
   -> jobs.createJob
   -> pipeline.transcribeFile
   -> ffmpeg conversion
   -> selected transcription engine
-  -> postProcessTranscript + summarizeTranscript
   -> output/<timestamp>.txt
   -> output/history.json
   -> SSE progress/done events
-  -> Browser result panes and history
 ```
 
 ### Video Download
 
 ```txt
-Browser video URL
+CRM video URL
+  -> packages/api-client
   -> POST /videos/formats
+  -> shared Zod validation
   -> videoDownload.getVideoFormats
   -> yt-dlp --dump-json
-  -> Browser format selector
+  -> CRM format selector
   -> POST /videos/download
   -> videoDownload.downloadVideo
-  -> yt-dlp selected format
   -> downloads/<safe_title-formatId>.<ext>
-  -> Browser saved path
 ```
 
 ## Generated And Local Files
@@ -219,10 +215,9 @@ Browser video URL
 Do not commit these unless the project intentionally changes policy:
 
 - `node_modules/`
-- `client/node_modules/`
-- `server/node_modules/`
-- `client/dist/`
-- `.next/`
-- Runtime contents of `downloads/`
-- Runtime contents of `source/`, `tmp/`, and `output/`
-- `server/.env`
+- `apps/crm/.next/`
+- `apps/extension/.wxt/`
+- `apps/extension/.output/`
+- `packages/*/dist/`
+- Runtime contents of `downloads/`, `source/`, `tmp/` and `output/`
+- Any `.env` file

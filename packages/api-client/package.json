@@ -1,0 +1,25 @@
+{
+  "name": "@transcribator/api-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "pnpm --filter @transcribator/shared build && tsc",
+    "typecheck": "pnpm --filter @transcribator/shared build && tsc --noEmit",
+    "check": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@transcribator/shared": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

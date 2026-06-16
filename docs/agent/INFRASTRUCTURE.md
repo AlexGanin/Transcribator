@@ -1,58 +1,61 @@
 # Infrastructure
 
-This file documents local runtime infrastructure, commands, ports, environment variables, and external dependencies.
+This file documents local runtime infrastructure, commands, ports, environment variables and external dependencies.
 
 ## Runtime Model
 
-Transcribator currently runs as two local processes:
+Transcribator runs as a pnpm workspace with two local development processes by default:
 
-- Frontend: Vite dev server at `http://localhost:3002`.
-- Backend: Express API at `http://localhost:3001`.
+- CRM: Next.js dev server at `http://localhost:3002`.
+- API: Express server at `http://localhost:3001`.
 
-The frontend calls the backend directly through `http://localhost:3001`. CORS is enabled by the backend.
+The Chrome extension is developed separately with WXT when needed.
 
 ## Ports
 
 | Service | Default | Source |
 | --- | --- | --- |
-| Client UI | `127.0.0.1:3002` | `client/package.json` |
-| Server API | `127.0.0.1:3001` | `server/src/index.js`, overridable by `server/.env` |
+| CRM UI | `127.0.0.1:3002` | `apps/crm/package.json` |
+| API | `127.0.0.1:3001` | `apps/api/src/index.js`, overridable by `apps/api/.env` |
 
-The client uses `--strictPort`, so it fails instead of silently moving to another port if `3002` is busy.
+The CRM uses `NEXT_PUBLIC_API_BASE_URL` when provided, otherwise `http://localhost:3001`.
+The extension uses `VITE_API_BASE_URL` when provided, otherwise `http://localhost:3001`.
 
 ## Commands
 
 Run from the repository root unless noted.
 
 ```sh
-npm install
-npm run install:all
-cp server/.env.example server/.env
-npm run dev
+corepack enable
+pnpm install
+cp apps/api/.env.example apps/api/.env
+pnpm dev
 ```
 
 Verification:
 
 ```sh
-npm run check
+pnpm typecheck
+pnpm build
+pnpm check
 git diff --check
 ```
 
 Component commands:
 
 ```sh
-npm run dev --prefix server
-npm run check --prefix server
-npm run dev --prefix client
-npm run build --prefix client
+pnpm --filter @transcribator/api dev
+pnpm --filter @transcribator/crm dev
+pnpm --filter @transcribator/extension dev
 ```
 
 ## Environment Files
 
-- `server/.env.example` is committed and documents supported values.
-- `server/.env` is local-only and ignored by git.
+- `apps/api/.env.example` is committed and documents supported API values.
+- `apps/api/.env` is local-only and ignored by git.
+- `.env` files are ignored throughout the workspace.
 
-## Server Environment Variables
+## API Environment Variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -99,7 +102,7 @@ pipx install mlx-whisper
 
 | Path | Owner | Contents |
 | --- | --- | --- |
-| `source/` | `pipeline.transcribeFile` | Safe-name copies of uploaded source media |
+| `source/` | `apps/api/src/pipeline.js` | Safe-name copies of uploaded source media |
 | `tmp/` | multer and pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
 | `output/` | pipeline and jobs | Final transcript `.txt` files and `history.json` |
 | `downloads/` | video download API | Downloaded YouTube videos |
@@ -118,6 +121,8 @@ Only `.gitkeep` files should be committed from these directories.
 | `POST` | `/videos/formats` | Return available video download formats |
 | `POST` | `/videos/download` | Download selected video format to `downloads/` |
 
+Request and response schemas live in `packages/shared`.
+
 ## Progress Stages
 
 URL jobs use:
@@ -133,12 +138,12 @@ File jobs use:
 - `transcribe`
 - `postprocess`
 
-The client renders stage progress from SSE events and estimates elapsed time locally.
+The CRM renders stage progress from SSE events and estimates elapsed time locally.
 
 ## Operational Notes
 
-- If `npm run dev` fails with `EADDRINUSE`, check ports `3001` and `3002`.
+- If `pnpm dev` fails with `EADDRINUSE`, check ports `3001` and `3002`.
 - If MLX Whisper fails with `No Metal device available`, run the dev server from a normal macOS terminal session instead of a headless or virtualized session.
-- If an external command is not found, either install it or set the corresponding absolute command path in `server/.env`.
-- Pipeline stderr is printed to the server process and included in API error messages.
-- Express does not hot-reload; restart `npm run dev` after server route changes.
+- If an external command is not found, either install it or set the corresponding absolute command path in `apps/api/.env`.
+- Pipeline stderr is printed to the API process and included in API error messages.
+- Express does not hot-reload; restart `pnpm dev` after API route changes.

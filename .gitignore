@@ -1,7 +1,12 @@
 node_modules/
-client/node_modules/
-server/node_modules/
-client/dist/
+apps/*/node_modules/
+packages/*/node_modules/
+apps/crm/.next/
+apps/crm/out/
+apps/extension/.wxt/
+apps/extension/.output/
+packages/*/dist/
+*.tsbuildinfo
 .next/
 downloads/*
 source/*

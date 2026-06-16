@@ -1,0 +1,23 @@
+{
+  "name": "@transcribator/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @transcribator/shared build && node src/index.js",
+    "build": "node --check src/index.js && node --check src/jobs.js && node --check src/pipeline.js && node --check src/postProcess.js && node --check src/videoDownload.js",
+    "typecheck": "pnpm build",
+    "check": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@transcribator/shared": "workspace:*",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.3",
+    "multer": "^2.1.1",
+    "openai": "^4.87.3"
+  }
+}
