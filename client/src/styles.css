@@ -28,6 +28,32 @@ h1 {
   font-size: 28px;
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+}
+
+.tabButton {
+  border-radius: 6px 6px 0 0;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: #333;
+}
+
+.tabButton.active {
+  background: #222;
+  color: #fff;
+}
+
+.tabPanel {
+  display: grid;
+  gap: 18px;
+}
+
 .form {
   display: grid;
   gap: 16px;
@@ -190,6 +216,21 @@ textarea {
 
 .saved {
   color: #245b2b;
+}
+
+.downloadPanel {
+  display: grid;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.downloadPanel h2 {
+  margin: 0;
+  font-size: 20px;
+  word-break: break-word;
 }
 
 .history {

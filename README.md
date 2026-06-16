@@ -6,6 +6,7 @@ Minimal React + Node.js project for transcribing audio from YouTube links, gener
 
 - Frontend: React + Vite UI with URL input, file upload, button and result textarea.
 - Backend: Express API with `POST /transcribe/url` and `POST /transcribe/file`.
+- Video downloader: paste a YouTube URL, choose an available format and save the video to `/downloads`.
 - URL pipeline: `yt-dlp stdout -> ffmpeg stdin`, then Whisper.
 - File pipeline: uploaded file is saved to `/source/<original_filename>`, then streamed through `ffmpeg`.
 - Results are post-processed and saved to `/output/<timestamp>.txt`.
@@ -131,6 +132,12 @@ Backend:
 http://localhost:3001
 ```
 
+Downloaded videos are saved to:
+
+```txt
+downloads/
+```
+
 ## API
 
 ### `POST /transcribe/url`
@@ -150,6 +157,31 @@ Multipart form-data:
 ```txt
 file=<audio_or_video_file>
 ```
+
+### `POST /videos/formats`
+
+Body:
+
+```json
+{
+  "url": "https://www.youtube.com/watch?v=..."
+}
+```
+
+Returns available video formats for the URL.
+
+### `POST /videos/download`
+
+Body:
+
+```json
+{
+  "url": "https://www.youtube.com/watch?v=...",
+  "formatId": "18"
+}
+```
+
+Downloads the selected format to `downloads/`.
 
 ## Project Structure
 
@@ -171,6 +203,7 @@ project-root
   source
   output
   tmp
+  downloads
   package.json
   README.md
 ```

@@ -78,6 +78,10 @@ Required for URL transcription:
 - `ffmpeg`
 - One transcription engine command or OpenAI API credentials
 
+Required for video downloads:
+
+- `yt-dlp`
+
 Required for file transcription:
 
 - `ffmpeg`
@@ -98,6 +102,7 @@ pipx install mlx-whisper
 | `source/` | `pipeline.transcribeFile` | Safe-name copies of uploaded source media |
 | `tmp/` | multer and pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
 | `output/` | pipeline and jobs | Final transcript `.txt` files and `history.json` |
+| `downloads/` | video download API | Downloaded YouTube videos |
 
 Only `.gitkeep` files should be committed from these directories.
 
@@ -110,6 +115,8 @@ Only `.gitkeep` files should be committed from these directories.
 | `POST` | `/transcribe/file` | Start uploaded file transcription job |
 | `GET` | `/transcribe/history` | Return saved history entries |
 | `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream for job progress |
+| `POST` | `/videos/formats` | Return available video download formats |
+| `POST` | `/videos/download` | Download selected video format to `downloads/` |
 
 ## Progress Stages
 
@@ -134,3 +141,4 @@ The client renders stage progress from SSE events and estimates elapsed time loc
 - If MLX Whisper fails with `No Metal device available`, run the dev server from a normal macOS terminal session instead of a headless or virtualized session.
 - If an external command is not found, either install it or set the corresponding absolute command path in `server/.env`.
 - Pipeline stderr is printed to the server process and included in API error messages.
+- Express does not hot-reload; restart `npm run dev` after server route changes.

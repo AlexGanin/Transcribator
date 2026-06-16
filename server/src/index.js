@@ -6,6 +6,7 @@ import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
 import { createJob, getJob, listHistory } from './jobs.js';
+import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -15,6 +16,7 @@ const maxUploadSizeGb = parsePositiveNumberEnv('MAX_UPLOAD_SIZE_GB', 10);
 const maxUploadSizeBytes = Math.floor(maxUploadSizeGb * 1024 ** 3);
 
 await ensureRuntimeDirs();
+await ensureDownloadDir();
 await mkdir(uploadDir, { recursive: true });
 
 const upload = multer({
@@ -58,6 +60,22 @@ app.post('/transcribe/file', upload.single('file'), async (req, res, next) => {
 app.get('/transcribe/history', async (req, res, next) => {
   try {
     res.json({ history: await listHistory() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/formats', async (req, res, next) => {
+  try {
+    res.json(await getVideoFormats(req.body?.url));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/download', async (req, res, next) => {
+  try {
+    res.status(202).json(await downloadVideo(req.body?.url, req.body?.formatId));
   } catch (error) {
     next(error);
   }

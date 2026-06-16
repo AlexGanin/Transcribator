@@ -11,6 +11,7 @@ Transcribator
   source/              Runtime copy of uploaded source files
   tmp/                 Runtime temporary uploads, WAV files, and CLI output folders
   output/              Runtime transcript files and history.json
+  downloads/           Runtime downloaded YouTube videos
   docs/agent/          Agent-facing project documentation
   package.json         Root orchestration scripts
   package-lock.json    Root dependency lockfile for orchestration dependencies
@@ -30,7 +31,7 @@ Transcribator
   - Currently needed for `concurrently`.
 
 - `.gitignore`
-  - Ignores dependency folders and runtime output under `source/`, `output/`, and `tmp/`.
+  - Ignores dependency folders and runtime output under `downloads/`, `source/`, `output/`, and `tmp/`.
   - Ignores local Next.js artifacts under `.next/`.
   - Keeps `.gitkeep` files so runtime directories exist in a fresh checkout.
 
@@ -57,10 +58,12 @@ client
 
 - `client/src/main.jsx`
   - Main React application.
+  - Owns top-level tabs for `Транскрибатор` and `Скачать видео`.
   - Owns UI state for source mode, URL, selected file, engine, run status, progress stages, result text, and history.
   - Talks to the API through `API_URL`, defaulting to `http://localhost:3001`.
   - Opens an `EventSource` for `/transcribe/jobs/:id/events`.
   - Sends URL requests as JSON and file requests as multipart form data.
+  - Requests video formats from `/videos/formats` and downloads from `/videos/download`.
 
 - `client/src/styles.css`
   - Global styles for the app shell, form, progress, results, and history.
@@ -78,12 +81,15 @@ server
     jobs.js
     pipeline.js
     postProcess.js
+    videoDownload.js
+    videoDownload.test.js
 ```
 
 - `server/package.json`
   - Express server scripts and dependencies.
   - `npm run dev --prefix server` and `npm run start --prefix server` both run `node src/index.js`.
-  - `npm run check --prefix server` syntax-checks the server entry and pipeline files.
+  - `npm run test --prefix server` runs Node test files.
+  - `npm run check --prefix server` runs tests and syntax-checks the server entry and pipeline files.
 
 - `server/.env.example`
   - Documents server runtime configuration.
@@ -99,6 +105,8 @@ server
     - `POST /transcribe/url`
     - `POST /transcribe/file`
     - `GET /transcribe/history`
+    - `POST /videos/formats`
+    - `POST /videos/download`
     - `GET /transcribe/jobs/:id/events`
 
 - `server/src/jobs.js`
@@ -125,6 +133,16 @@ server
   - Local transcript cleanup and simple summary generation.
   - Removes common noise tokens, normalizes spacing, capitalizes sentences, groups paragraphs, and selects summary sentences.
 
+- `server/src/videoDownload.js`
+  - Video download helper layer.
+  - Validates video URLs.
+  - Reads available video formats from `yt-dlp --dump-json`.
+  - Normalizes formats for the browser UI.
+  - Downloads selected formats to `downloads/`.
+
+- `server/src/videoDownload.test.js`
+  - Unit tests for format normalization and safe download filenames.
+
 ## Runtime Directories
 
 - `source/`
@@ -137,6 +155,10 @@ server
 
 - `output/`
   - Receives final transcript `.txt` files and `history.json`.
+  - Contents are ignored by git except `.gitkeep`.
+
+- `downloads/`
+  - Receives downloaded YouTube videos.
   - Contents are ignored by git except `.gitkeep`.
 
 ## Data Flow
@@ -177,6 +199,21 @@ Browser multipart upload
   -> Browser result panes and history
 ```
 
+### Video Download
+
+```txt
+Browser video URL
+  -> POST /videos/formats
+  -> videoDownload.getVideoFormats
+  -> yt-dlp --dump-json
+  -> Browser format selector
+  -> POST /videos/download
+  -> videoDownload.downloadVideo
+  -> yt-dlp selected format
+  -> downloads/<safe_title-formatId>.<ext>
+  -> Browser saved path
+```
+
 ## Generated And Local Files
 
 Do not commit these unless the project intentionally changes policy:
@@ -186,5 +223,6 @@ Do not commit these unless the project intentionally changes policy:
 - `server/node_modules/`
 - `client/dist/`
 - `.next/`
+- Runtime contents of `downloads/`
 - Runtime contents of `source/`, `tmp/`, and `output/`
 - `server/.env`

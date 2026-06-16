@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "node src/index.js",
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/pipeline.js && node --check src/postProcess.js"
+    "test": "node --test src/*.test.js",
+    "check": "npm run test && node --check src/index.js && node --check src/pipeline.js && node --check src/postProcess.js && node --check src/videoDownload.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

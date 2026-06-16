@@ -3,9 +3,11 @@ client/node_modules/
 server/node_modules/
 client/dist/
 .next/
+downloads/*
 source/*
 output/*
 tmp/*
+!downloads/.gitkeep
 !source/.gitkeep
 !output/.gitkeep
 !tmp/.gitkeep

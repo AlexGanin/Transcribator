@@ -39,7 +39,7 @@ Use the smallest verification that proves the change, then run broader checks fo
 
 | Change Type | Required Verification |
 | --- | --- |
-| Server JS behavior | `npm run check --prefix server` |
+| Server JS behavior | `npm run test --prefix server` and `npm run check --prefix server` |
 | Client UI or package changes | `npm run build --prefix client` |
 | Root script or cross-component change | `npm run check` |
 | Documentation-only change | `git diff --check` plus read the changed docs |
