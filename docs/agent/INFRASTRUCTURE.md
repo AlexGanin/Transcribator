@@ -108,14 +108,18 @@ pipx install mlx-whisper
 
 ## Runtime storage
 
-| Путь | Владелец | Содержимое |
-| --- | --- | --- |
-| `runtime/source/` | `apps/api/src/pipeline.ts` | Safe-name copies загруженных source media |
-| `runtime/tmp/` | multer и pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
-| `runtime/output/` | pipeline и jobs | Итоговые transcript `.txt` files и `history.json` |
-| `runtime/downloads/` | video download API | Скачанные YouTube videos |
+`runtime/` — общий локальный каталог для файлов, которые появляются во время работы API. Это не исходники проекта, а рабочие данные: загруженные медиа, временные файлы конвертации, результаты транскрибации и скачанные видео. Каталог нужен, чтобы runtime-артефакты не смешивались с кодом, пакетами и документацией.
 
-Из этих директорий в git должны попадать только `.gitkeep` files.
+| Путь | Кто использует | Что появляется внутри |
+| --- | --- | --- |
+| `runtime/source/` | `apps/api/src/pipeline.ts` | Копии файлов, которые пользователь отправил на транскрибацию через upload. API сохраняет их под безопасным именем файла, чтобы исходник можно было повторно обработать или сверить с результатом. |
+| `runtime/tmp/` | `multer`, `apps/api/src/index.ts`, `apps/api/src/pipeline.ts` | Временные upload-файлы, WAV-файлы после конвертации через `ffmpeg`, а также рабочие папки CLI-движков Whisper. Эти данные нужны только во время обработки и могут очищаться после завершения задач. |
+| `runtime/output/` | `apps/api/src/pipeline.ts`, `apps/api/src/jobs.ts` | Итоговые `.txt`-транскрипты и файл `history.json`. Транскрипты создаются после успешной обработки URL или загруженного файла, а `history.json` хранит последние записи истории для UI. |
+| `runtime/downloads/` | `apps/api/src/videoDownload.ts` | Видео, скачанные через вкладку скачивания YouTube. Имя файла формируется из названия ролика и выбранного format id. |
+
+Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/` и `runtime/downloads/` коммитятся только `.gitkeep` файлы. Все реальные медиа, временные файлы, транскрипты, `history.json`, скачанные видео и системные файлы вроде `.DS_Store` должны оставаться локальными.
+
+Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/` и старых файлов в `runtime/downloads/`. `runtime/output/history.json` и итоговые транскрипты лучше удалять осознанно, потому что они используются экраном истории в CRM.
 
 ## API surface
 
