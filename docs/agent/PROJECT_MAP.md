@@ -1,47 +1,47 @@
-# Project Map
+# Карта проекта
 
-This file maps the current repository structure and the responsibility of each important area.
+Этот файл описывает текущую структуру репозитория и ответственность каждой важной области.
 
-## Top-Level Layout
+## Верхнеуровневая структура
 
 ```txt
 Transcribator
   apps/
-    api/          Express API and transcription/video pipeline
+    api/          Express API и transcription/video pipeline
     crm/          Next.js App Router CRM
     extension/    WXT React Chrome extension
   packages/
     api-client/   fetch-based API client
-    shared/       Zod schemas, DTOs and shared types
-    ui/           shared shadcn-style React components
-  source/         Runtime copy of uploaded source files
-  tmp/            Runtime temporary uploads, WAV files and CLI output folders
-  output/         Runtime transcript files and history.json
+    shared/       Zod schemas, DTOs и общие types
+    ui/           общие shadcn-style React components
+  source/         Runtime-копии загруженных source files
+  tmp/            Runtime temporary uploads, WAV files и CLI output folders
+  output/         Runtime transcript files и history.json
   downloads/      Runtime downloaded YouTube videos
-  docs/agent/     Agent-facing project documentation
-  package.json    Root pnpm workspace commands
+  docs/agent/     Агентская документация проекта
+  package.json    Корневые pnpm workspace commands
   pnpm-lock.yaml  Workspace lockfile
 ```
 
-## Root Files
+## Корневые файлы
 
 - `package.json`
-  - Owns root `dev`, `build`, `typecheck` and `check` commands.
-  - Starts the Express API and Next CRM together for local development.
+  - Отвечает за корневые команды `dev`, `build`, `typecheck` и `check`.
+  - Запускает Express API и Next CRM вместе для локальной разработки.
 
 - `pnpm-workspace.yaml`
-  - Includes `apps/*` and `packages/*`.
+  - Подключает `apps/*` и `packages/*`.
 
 - `tsconfig.base.json`
-  - Shared strict TypeScript defaults for new apps and packages.
+  - Общие строгие TypeScript-настройки для новых apps и packages.
 
 - `.gitignore`
-  - Ignores dependency folders, Next/WXT build output, package `dist/` folders and runtime output under `downloads/`, `source/`, `output/`, and `tmp/`.
+  - Игнорирует dependency folders, Next/WXT build output, package `dist/` folders и runtime output в `downloads/`, `source/`, `output/`, `tmp/`.
 
 - `README.md`
-  - Human-facing overview, install, run, API and architecture notes.
+  - Пользовательский обзор проекта, установка, запуск, API и архитектурные заметки.
 
-## Apps
+## Приложения
 
 ### `apps/api`
 
@@ -58,27 +58,27 @@ apps/api
 ```
 
 - `src/index.js`
-  - Express app entry point.
-  - Loads `apps/api/.env`.
-  - Binds to `HOST` and `PORT`, defaulting to `127.0.0.1:3001`.
-  - Configures CORS, JSON parsing, multer uploads, route handlers, SSE and error handling.
-  - Validates request bodies with schemas from `@transcribator/shared`.
+  - Entry point Express app.
+  - Загружает `apps/api/.env`.
+  - Биндится к `HOST` и `PORT`, по умолчанию `127.0.0.1:3001`.
+  - Настраивает CORS, JSON parsing, multer uploads, route handlers, SSE и error handling.
+  - Валидирует request bodies схемами из `@transcribator/shared`.
 
 - `src/jobs.js`
-  - In-memory job registry and event emitter layer.
-  - Starts transcription tasks asynchronously.
-  - Stores live events for SSE replay.
-  - Writes run history to root `output/history.json`.
+  - In-memory job registry и event emitter layer.
+  - Асинхронно запускает transcription tasks.
+  - Хранит live events для SSE replay.
+  - Пишет историю запусков в корневой `output/history.json`.
 
 - `src/pipeline.js`
-  - Core transcription pipeline.
-  - Uses root `source/`, `tmp/` and `output/`.
-  - Runs `yt-dlp`, `ffmpeg`, local Whisper engines or OpenAI Audio Transcriptions.
-  - Emits progress stages to `jobs.js`.
+  - Основной transcription pipeline.
+  - Использует корневые `source/`, `tmp/` и `output/`.
+  - Запускает `yt-dlp`, `ffmpeg`, локальные Whisper engines или OpenAI Audio Transcriptions.
+  - Отправляет progress stages в `jobs.js`.
 
 - `src/videoDownload.js`
-  - Reads available video formats with `yt-dlp --dump-json`.
-  - Downloads selected formats to root `downloads/`.
+  - Читает доступные video formats через `yt-dlp --dump-json`.
+  - Скачивает выбранные formats в корневую `downloads/`.
 
 ### `apps/crm`
 
@@ -92,10 +92,10 @@ apps/crm
 ```
 
 - Next.js App Router TypeScript app.
-- Runs at `127.0.0.1:3002`.
-- Uses `@transcribator/api-client` for every API call.
-- Uses `@transcribator/ui` for shared controls.
-- Provides:
+- Запускается на `127.0.0.1:3002`.
+- Использует `@transcribator/api-client` для каждого API-вызова.
+- Использует `@transcribator/ui` для общих controls.
+- Реализует:
   - URL transcription
   - file transcription
   - transcription engine selection
@@ -120,49 +120,49 @@ apps/extension
 ```
 
 - WXT + React + TypeScript Manifest V3 extension.
-- Popup uses `@transcribator/api-client`.
-- Background service worker stores extension defaults and the last YouTube URL.
-- YouTube content script uses Shadow DOM style isolation.
-- No remote hosted code is used.
+- Popup использует `@transcribator/api-client`.
+- Background service worker хранит defaults extension и последний YouTube URL.
+- YouTube content script использует Shadow DOM style isolation.
+- Remote hosted code не используется.
 
-## Packages
+## Пакеты
 
 ### `packages/shared`
 
-- Owns Zod API contracts and `z.infer` types.
-- Includes request schemas, response schemas, progress event schemas, engine enum, job status enum, video format DTOs and API error DTOs.
-- Must not import React, Next, Chrome APIs or Node-only APIs.
+- Отвечает за Zod API contracts и `z.infer` types.
+- Содержит request schemas, response schemas, progress event schemas, engine enum, job status enum, video format DTOs и API error DTOs.
+- Не должен импортировать React, Next, Chrome APIs или Node-only APIs.
 
 ### `packages/api-client`
 
-- Pure fetch-based client.
-- Works in the Next CRM, extension popup/background/content scripts and normal browser contexts.
-- Imports and validates against `packages/shared` schemas.
-- Normalizes failed responses into `ApiClientError`.
-- Must not import React, TanStack Query, Next APIs, Chrome APIs or Node-only APIs.
+- Чистый fetch-based client.
+- Работает в Next CRM, extension popup/background/content scripts и обычных browser contexts.
+- Импортирует и валидирует данные схемами из `packages/shared`.
+- Нормализует failed responses в `ApiClientError`.
+- Не должен импортировать React, TanStack Query, Next APIs, Chrome APIs или Node-only APIs.
 
 ### `packages/ui`
 
-- Shared React components styled with Tailwind classes and Radix primitives.
-- Includes Button, Input, Textarea, Select, Tabs, Progress, Badge and Card primitives.
-- Each component lives in its own folder under `src/components/<component>/index.tsx` so stories, notes and component-local files can sit next to implementation.
-- Must stay framework-agnostic: no Next APIs, Chrome APIs or Node APIs.
+- Общие React components, стилизованные Tailwind classes и Radix primitives.
+- Содержит Button, Input, Textarea, Select, Tabs, Progress, Badge и Card primitives.
+- Каждый компонент лежит в отдельной папке `src/components/<component>/index.tsx`, чтобы рядом можно было хранить stories, notes и component-local files.
+- Должен оставаться framework-agnostic: без Next APIs, Chrome APIs или Node APIs.
 
-## Runtime Directories
+## Runtime-директории
 
-- `source/`: safe-name copies of uploaded source files.
-- `tmp/`: multer uploads, generated WAV files and Whisper output folders.
-- `output/`: final transcript `.txt` files and `history.json`.
-- `downloads/`: downloaded YouTube videos.
+- `source/`: safe-name copies загруженных source files.
+- `tmp/`: multer uploads, generated WAV files и Whisper output folders.
+- `output/`: итоговые transcript `.txt` files и `history.json`.
+- `downloads/`: скачанные YouTube videos.
 
-Only `.gitkeep` files should be committed from these directories.
+Из этих директорий в git должны попадать только `.gitkeep` files.
 
-## Data Flow
+## Data flow
 
-### URL Transcription
+### URL transcription
 
 ```txt
-CRM or extension
+CRM или extension
   -> packages/api-client
   -> POST /transcribe/url
   -> shared Zod validation
@@ -175,10 +175,10 @@ CRM or extension
   -> output/<timestamp>.txt
   -> output/history.json
   -> SSE progress/done events
-  -> CRM result panes and history
+  -> CRM result panes и history
 ```
 
-### File Transcription
+### File transcription
 
 ```txt
 CRM multipart upload
@@ -196,7 +196,7 @@ CRM multipart upload
   -> SSE progress/done events
 ```
 
-### Video Download
+### Video download
 
 ```txt
 CRM video URL
@@ -211,14 +211,14 @@ CRM video URL
   -> downloads/<safe_title-formatId>.<ext>
 ```
 
-## Generated And Local Files
+## Generated и локальные файлы
 
-Do not commit these unless the project intentionally changes policy:
+Не коммить эти файлы, если политика проекта явно не изменилась:
 
 - `node_modules/`
 - `apps/crm/.next/`
 - `apps/extension/.wxt/`
 - `apps/extension/.output/`
 - `packages/*/dist/`
-- Runtime contents of `downloads/`, `source/`, `tmp/` and `output/`
-- Any `.env` file
+- Runtime contents в `downloads/`, `source/`, `tmp/`, `output/`
+- Любой `.env` file

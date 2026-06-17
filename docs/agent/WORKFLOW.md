@@ -1,94 +1,98 @@
-# Agent Workflow
+# Агентский workflow
 
-This file describes the preferred workflow for agents changing this repository.
+Этот файл описывает предпочтительный workflow для агентов, которые меняют репозиторий.
 
-## Before Editing
+## Перед редактированием
 
-1. Read `docs/agent/README.md`.
-2. Check status:
+1. Прочитай `docs/agent/README.md`.
+2. Проверь статус:
 
 ```sh
 git status --short
 ```
 
-3. Search with `rg` before changing behavior:
+3. Перед изменением поведения ищи по проекту через `rg`:
 
 ```sh
 rg -n "term-to-find" .
 ```
 
-4. Identify which documentation file must be updated with the change:
+4. Определи, какой файл документации нужно обновить:
 
-- Structure or responsibility changed: update `PROJECT_MAP.md`.
-- Ports, commands, env vars, tools, or runtime paths changed: update `INFRASTRUCTURE.md`.
-- Development process changed: update `WORKFLOW.md`.
-- Any meaningful behavior changed: append `CHANGELOG.md`.
+- Изменилась структура или ответственность: обнови `PROJECT_MAP.md`.
+- Изменились порты, команды, env vars, инструменты или runtime paths: обнови `INFRASTRUCTURE.md`.
+- Изменился процесс разработки: обнови `WORKFLOW.md`.
+- Любое значимое изменение поведения: добавь запись в `CHANGELOG.md`.
 
-## Editing Rules
+## Правила редактирования
 
-- Keep changes scoped to the user request.
-- Keep Express business logic in `apps/api`; do not move media work into Next route handlers.
-- Keep shared contracts in `packages/shared` and use Zod for runtime API validation.
-- Keep browser API calls in `packages/api-client`; do not add React, Next, Chrome or Node-specific APIs there.
-- Keep shared UI in `packages/ui`; do not add Next, Chrome or Node-specific APIs there.
-- Do not commit generated files such as `.next/`, `.wxt/`, package `dist/`, `source/*`, `tmp/*`, `output/*`, or `downloads/*`.
-- Keep `.env` files local-only.
-- Preserve current runtime behavior unless the user explicitly asks to change it.
-- Prefer small files with clear ownership when adding new code.
-- Update agent docs in the same change as the behavior they describe.
+- Держи изменения строго в рамках пользовательского запроса.
+- Оставляй Express business logic в `apps/api`; не переноси media-логику в Next route handlers.
+- Держи общие контракты в `packages/shared` и используй Zod для runtime API validation.
+- Держи браузерные API-вызовы в `packages/api-client`; не добавляй туда React, Next, Chrome или Node-specific API.
+- Держи общий UI в `packages/ui`; не добавляй туда Next, Chrome или Node-specific API.
+- Не коммить generated files: `.next/`, `.wxt/`, package `dist/`, `source/*`, `tmp/*`, `output/*`, `downloads/*`.
+- Держи `.env` файлы только локально.
+- Сохраняй текущее runtime-поведение, если пользователь явно не просит изменить его.
+- Предпочитай небольшие файлы с понятной ответственностью при добавлении нового кода.
+- Обновляй агентскую документацию в той же правке, в которой меняется описываемое поведение.
+- Все проектные правила и агентская документация должны быть написаны на русском языке.
 
-## Verification Matrix
+## Матрица проверок
 
-Use the smallest verification that proves the change, then run broader checks for shared behavior.
+Используй самую маленькую проверку, которая доказывает изменение, затем запускай более широкие проверки для общего поведения.
 
-| Change Type | Required Verification |
+| Тип изменения | Обязательная проверка |
 | --- | --- |
-| API JS behavior | `pnpm --filter @transcribator/api check` |
-| Shared contract or API client change | `pnpm --filter @transcribator/shared check` and `pnpm --filter @transcribator/api-client check` |
-| CRM UI change | `pnpm --filter @transcribator/crm check` |
-| Extension change | `pnpm --filter @transcribator/extension check` |
-| Root script or cross-workspace change | `pnpm check` |
-| Documentation-only change | `git diff --check` plus read the changed docs |
-| Port or startup change | `pnpm dev`, confirm ports, then stop the run unless asked to keep it running |
+| Поведение API на JS | `pnpm --filter @transcribator/api check` |
+| Shared contract или API client | `pnpm --filter @transcribator/shared check` и `pnpm --filter @transcribator/api-client check` |
+| CRM UI | `pnpm --filter @transcribator/crm check` |
+| Extension | `pnpm --filter @transcribator/extension check` |
+| Root script или cross-workspace изменение | `pnpm check` |
+| Только документация | `git diff --check` плюс чтение измененных docs |
+| Порт или запуск | `pnpm dev`, подтверждение портов, затем остановка процесса, если пользователь не просил оставить его запущенным |
 
-Always run:
+Всегда запускай:
 
 ```sh
 git diff --check
 ```
 
-before claiming a change is complete or before committing.
+перед утверждением, что изменение завершено, и перед коммитом.
 
-## Change Log Practice
+## Практика changelog
 
-Append `docs/agent/CHANGELOG.md` after every meaningful change.
+Добавляй запись в `docs/agent/CHANGELOG.md` после каждого значимого изменения.
 
-Use this format:
+Формат:
 
 ```md
 ## YYYY-MM-DD
 
-- Changed: short description.
-- Verified: command or manual check.
-- Docs: files updated.
+- Изменено: краткое описание.
+- Проверено: команда или ручная проверка.
+- Документация: обновленные файлы.
 ```
 
-If a change is documentation-only, still record it when it creates or changes agent operating knowledge.
+Если изменение касается только документации, все равно записывай его, когда оно создает или меняет агентские знания о проекте.
 
-## Commit Practice
+## Практика коммитов
 
-When the user asks for a commit:
+Когда пользователь просит сделать коммит:
 
-1. Inspect `git status --short`.
-2. Inspect `git diff --stat` and relevant diffs.
-3. Run required verification.
-4. Stage only relevant files.
-5. Commit with a concise message.
-6. Report commit hash and remaining untracked or modified files.
+1. Проверь `git status --short`.
+2. Проверь `git diff --stat` и релевантные diff.
+3. Запусти обязательную проверку.
+4. Добавь в stage только релевантные файлы.
+5. Получи текущую ветку командой `git branch --show-current`.
+6. Сделай коммит с сообщением в формате `<branch>. <Описание изменения с большой буквы>`.
+7. Сразу после успешного коммита выполни push.
+8. Сообщи hash коммита, результат push и оставшиеся untracked или modified файлы.
 
-Do not include unrelated user changes or generated artifacts in commits.
+Не включай в коммит несвязанные пользовательские изменения или generated artifacts.
+Если push не прошел из-за авторизации, сети или отсутствующего upstream, сообщи точную причину и оставь локальный коммит на месте.
 
-## Known Good Commands
+## Проверенные команды
 
 ```sh
 pnpm install
@@ -98,7 +102,7 @@ pnpm check
 git diff --check
 ```
 
-For local smoke checking:
+Локальный smoke-check:
 
 ```sh
 pnpm dev
@@ -106,4 +110,4 @@ curl -sS http://127.0.0.1:3001/health
 curl -sS -I http://127.0.0.1:3002/
 ```
 
-Stop the dev server after smoke checking unless the user asked to keep it running.
+Останавливай dev server после smoke-check, если пользователь не просил оставить его запущенным.

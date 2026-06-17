@@ -1,29 +1,29 @@
-# Infrastructure
+# Инфраструктура
 
-This file documents local runtime infrastructure, commands, ports, environment variables and external dependencies.
+Этот файл описывает локальную runtime-инфраструктуру, команды, порты, переменные окружения и внешние зависимости.
 
-## Runtime Model
+## Runtime model
 
-Transcribator runs as a pnpm workspace with two local development processes by default:
+Transcribator запускается как pnpm workspace. По умолчанию локальная разработка состоит из двух процессов:
 
-- CRM: Next.js dev server at `http://localhost:3002`.
-- API: Express server at `http://localhost:3001`.
+- CRM: Next.js dev server на `http://localhost:3002`.
+- API: Express server на `http://localhost:3001`.
 
-The Chrome extension is developed separately with WXT when needed.
+Chrome extension при необходимости разрабатывается отдельно через WXT.
 
-## Ports
+## Порты
 
-| Service | Default | Source |
+| Сервис | По умолчанию | Источник |
 | --- | --- | --- |
 | CRM UI | `127.0.0.1:3002` | `apps/crm/package.json` |
-| API | `127.0.0.1:3001` | `apps/api/src/index.js`, overridable by `apps/api/.env` |
+| API | `127.0.0.1:3001` | `apps/api/src/index.js`, можно переопределить через `apps/api/.env` |
 
-The CRM uses `NEXT_PUBLIC_API_BASE_URL` when provided, otherwise `http://localhost:3001`.
-The extension uses `VITE_API_BASE_URL` when provided, otherwise `http://localhost:3001`.
+CRM использует `NEXT_PUBLIC_API_BASE_URL`, если переменная задана, иначе `http://localhost:3001`.
+Extension использует `VITE_API_BASE_URL`, если переменная задана, иначе `http://localhost:3001`.
 
-## Commands
+## Команды
 
-Run from the repository root unless noted.
+Запускай из корня репозитория, если не указано иначе.
 
 ```sh
 corepack enable
@@ -32,7 +32,7 @@ cp apps/api/.env.example apps/api/.env
 pnpm dev
 ```
 
-Verification:
+Проверка:
 
 ```sh
 pnpm typecheck
@@ -41,7 +41,7 @@ pnpm check
 git diff --check
 ```
 
-Component commands:
+Команды отдельных компонентов:
 
 ```sh
 pnpm --filter @transcribator/api dev
@@ -49,48 +49,48 @@ pnpm --filter @transcribator/crm dev
 pnpm --filter @transcribator/extension dev
 ```
 
-## Environment Files
+## Env-файлы
 
-- `apps/api/.env.example` is committed and documents supported API values.
-- `apps/api/.env` is local-only and ignored by git.
-- `.env` files are ignored throughout the workspace.
+- `apps/api/.env.example` коммитится и описывает поддерживаемые API values.
+- `apps/api/.env` является локальным файлом и игнорируется git.
+- `.env` файлы игнорируются во всем workspace.
 
-## API Environment Variables
+## Переменные окружения API
 
-| Variable | Default | Purpose |
+| Переменная | По умолчанию | Назначение |
 | --- | --- | --- |
-| `PORT` | `3001` | Express API port |
-| `HOST` | `127.0.0.1` | Express bind host |
-| `TRANSCRIBE_TIMEOUT_MS` | `900000` through example, `15 * 60 * 1000` in code | Kill long-running child pipelines |
-| `MAX_UPLOAD_SIZE_GB` | `10` | Multer upload size limit |
-| `YTDLP_COMMAND` | `yt-dlp` | URL download command |
-| `FFMPEG_COMMAND` | `ffmpeg` | Media conversion command |
-| `TRANSCRIPTION_ENGINE` | `openai-whisper` | Default engine when request does not specify one |
-| `WHISPER_COMMAND` | `whisper` | OpenAI Whisper CLI command |
-| `WHISPER_ARGS` | `{input} --model base --output_format txt --output_dir {outputDir}` | OpenAI Whisper CLI args |
-| `MLX_WHISPER_COMMAND` | `mlx_whisper` | MLX Whisper command |
-| `MLX_WHISPER_ARGS` | `{input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}` | MLX Whisper args |
-| `OPENAI_API_KEY` | none | Required for `openai` engine |
-| `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | OpenAI Audio Transcriptions model |
+| `PORT` | `3001` | Порт Express API |
+| `HOST` | `127.0.0.1` | Host для Express bind |
+| `TRANSCRIBE_TIMEOUT_MS` | `900000` в example, `15 * 60 * 1000` в коде | Останавливает долгие child pipelines |
+| `MAX_UPLOAD_SIZE_GB` | `10` | Лимит размера multer upload |
+| `YTDLP_COMMAND` | `yt-dlp` | Команда для скачивания URL |
+| `FFMPEG_COMMAND` | `ffmpeg` | Команда для media conversion |
+| `TRANSCRIPTION_ENGINE` | `openai-whisper` | Движок по умолчанию, если request не задает engine |
+| `WHISPER_COMMAND` | `whisper` | Команда OpenAI Whisper CLI |
+| `WHISPER_ARGS` | `{input} --model base --output_format txt --output_dir {outputDir}` | Аргументы OpenAI Whisper CLI |
+| `MLX_WHISPER_COMMAND` | `mlx_whisper` | Команда MLX Whisper |
+| `MLX_WHISPER_ARGS` | `{input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}` | Аргументы MLX Whisper |
+| `OPENAI_API_KEY` | none | Обязательна для engine `openai` |
+| `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | Модель OpenAI Audio Transcriptions |
 
-## External Tools
+## Внешние инструменты
 
-Required for URL transcription:
+Для URL transcription нужны:
 
 - `yt-dlp`
 - `ffmpeg`
-- One transcription engine command or OpenAI API credentials
+- один transcription engine command или OpenAI API credentials
 
-Required for video downloads:
+Для video downloads нужен:
 
 - `yt-dlp`
 
-Required for file transcription:
+Для file transcription нужны:
 
 - `ffmpeg`
-- One transcription engine command or OpenAI API credentials
+- один transcription engine command или OpenAI API credentials
 
-Common install commands on macOS:
+Обычные команды установки на macOS:
 
 ```sh
 brew install yt-dlp ffmpeg
@@ -98,52 +98,52 @@ pipx install openai-whisper
 pipx install mlx-whisper
 ```
 
-## Runtime Storage
+## Runtime storage
 
-| Path | Owner | Contents |
+| Путь | Владелец | Содержимое |
 | --- | --- | --- |
-| `source/` | `apps/api/src/pipeline.js` | Safe-name copies of uploaded source media |
-| `tmp/` | multer and pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
-| `output/` | pipeline and jobs | Final transcript `.txt` files and `history.json` |
-| `downloads/` | video download API | Downloaded YouTube videos |
+| `source/` | `apps/api/src/pipeline.js` | Safe-name copies загруженных source media |
+| `tmp/` | multer и pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
+| `output/` | pipeline и jobs | Итоговые transcript `.txt` files и `history.json` |
+| `downloads/` | video download API | Скачанные YouTube videos |
 
-Only `.gitkeep` files should be committed from these directories.
+Из этих директорий в git должны попадать только `.gitkeep` files.
 
-## API Surface
+## API surface
 
-| Method | Path | Purpose |
+| Метод | Путь | Назначение |
 | --- | --- | --- |
-| `GET` | `/health` | Basic API health response |
-| `POST` | `/transcribe/url` | Start URL transcription job |
-| `POST` | `/transcribe/file` | Start uploaded file transcription job |
-| `GET` | `/transcribe/history` | Return saved history entries |
-| `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream for job progress |
-| `POST` | `/videos/formats` | Return available video download formats |
-| `POST` | `/videos/download` | Download selected video format to `downloads/` |
+| `GET` | `/health` | Базовый health response API |
+| `POST` | `/transcribe/url` | Запустить URL transcription job |
+| `POST` | `/transcribe/file` | Запустить uploaded file transcription job |
+| `GET` | `/transcribe/history` | Вернуть сохраненные history entries |
+| `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream для job progress |
+| `POST` | `/videos/formats` | Вернуть доступные video download formats |
+| `POST` | `/videos/download` | Скачать выбранный video format в `downloads/` |
 
-Request and response schemas live in `packages/shared`.
+Request и response schemas лежат в `packages/shared`.
 
-## Progress Stages
+## Progress stages
 
-URL jobs use:
+URL jobs используют:
 
 - `download`
 - `transcribe`
 - `postprocess`
 
-File jobs use:
+File jobs используют:
 
 - `upload`
 - `convert`
 - `transcribe`
 - `postprocess`
 
-The CRM renders stage progress from SSE events and estimates elapsed time locally.
+CRM отображает stage progress из SSE events и локально считает elapsed time.
 
-## Operational Notes
+## Операционные заметки
 
-- If `pnpm dev` fails with `EADDRINUSE`, check ports `3001` and `3002`.
-- If MLX Whisper fails with `No Metal device available`, run the dev server from a normal macOS terminal session instead of a headless or virtualized session.
-- If an external command is not found, either install it or set the corresponding absolute command path in `apps/api/.env`.
-- Pipeline stderr is printed to the API process and included in API error messages.
-- Express does not hot-reload; restart `pnpm dev` after API route changes.
+- Если `pnpm dev` падает с `EADDRINUSE`, проверь порты `3001` и `3002`.
+- Если MLX Whisper падает с `No Metal device available`, запускай dev server из обычной macOS terminal session, а не из headless или virtualized session.
+- Если external command не найдена, установи ее или задай абсолютный путь к команде в `apps/api/.env`.
+- Pipeline stderr печатается в API process и включается в API error messages.
+- Express не hot-reload'ится; перезапускай `pnpm dev` после изменений API routes.

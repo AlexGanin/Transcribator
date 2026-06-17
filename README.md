@@ -1,27 +1,27 @@
 # Transcribator
 
-Local pnpm workspace for transcribing media, tracking transcription history and downloading YouTube videos.
+Локальный pnpm workspace для транскрибации медиа, хранения истории транскрибаций и скачивания YouTube-видео.
 
-## What It Does
+## Что умеет проект
 
-- `apps/crm`: Next.js App Router CRM at `http://localhost:3002`.
-- `apps/api`: Express API at `http://localhost:3001`.
-- `apps/extension`: Chrome extension scaffold built with WXT, React and Manifest V3.
-- `packages/shared`: Zod API contracts, DTOs and shared types.
-- `packages/api-client`: fetch-based client used by the CRM and extension.
-- `packages/ui`: shadcn-style React UI primitives built on Tailwind and Radix.
+- `apps/crm`: CRM на Next.js App Router по адресу `http://localhost:3002`.
+- `apps/api`: Express API по адресу `http://localhost:3001`.
+- `apps/extension`: каркас Chrome extension на WXT, React и Manifest V3.
+- `packages/shared`: Zod-контракты API, DTO и общие типы.
+- `packages/api-client`: fetch-клиент, который используют CRM и extension.
+- `packages/ui`: shadcn-style React UI primitives на Tailwind и Radix.
 
-The Express API owns the transcription and video logic: `yt-dlp`, `ffmpeg`, Whisper engines, uploads, Server-Sent Events, history and downloads.
+Express API отвечает за всю транскрибацию и видео-логику: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, Server-Sent Events, историю и скачивания.
 
-## System Requirements
+## Системные требования
 
-- Node.js `^20.19.0` or `>=22.12.0`
-- pnpm through Corepack
+- Node.js `^20.19.0` или `>=22.12.0`
+- pnpm через Corepack
 - `yt-dlp`
 - `ffmpeg`
-- A local Whisper CLI, MLX Whisper, or OpenAI API credentials
+- локальный Whisper CLI, MLX Whisper или OpenAI API credentials
 
-Common macOS setup:
+Обычная установка на macOS:
 
 ```sh
 brew install yt-dlp ffmpeg
@@ -29,7 +29,7 @@ pipx install openai-whisper
 pipx install mlx-whisper
 ```
 
-## Install
+## Установка
 
 ```sh
 corepack enable
@@ -37,15 +37,15 @@ pnpm install
 cp apps/api/.env.example apps/api/.env
 ```
 
-Edit `apps/api/.env` if your local command paths or Whisper arguments are different.
+Отредактируй `apps/api/.env`, если локальные пути к командам или аргументы Whisper отличаются.
 
-## Run
+## Запуск
 
 ```sh
 pnpm dev
 ```
 
-Open:
+Открыть:
 
 ```txt
 http://localhost:3002
@@ -57,16 +57,16 @@ API:
 http://localhost:3001
 ```
 
-Runtime files are written to root-level folders:
+Runtime-файлы пишутся в корневые папки:
 
-- `source/`: uploaded source media copies
-- `tmp/`: uploads, WAV files and Whisper output folders
-- `output/`: transcripts and `history.json`
-- `downloads/`: downloaded videos
+- `source/`: копии загруженных исходных медиа
+- `tmp/`: uploads, WAV-файлы и папки вывода Whisper
+- `output/`: транскрипты и `history.json`
+- `downloads/`: скачанные видео
 
-## Commands
+## Команды
 
-Only these command categories are used:
+В проекте используются только эти категории команд:
 
 ```sh
 pnpm dev
@@ -75,7 +75,7 @@ pnpm typecheck
 pnpm check
 ```
 
-Run an individual workspace package with `--filter`, for example:
+Отдельный workspace-пакет можно запустить через `--filter`, например:
 
 ```sh
 pnpm --filter @transcribator/api dev
@@ -83,16 +83,16 @@ pnpm --filter @transcribator/crm dev
 pnpm --filter @transcribator/extension dev
 ```
 
-## Transcription Engines
+## Движки транскрибации
 
-The CRM and extension send the selected engine per request. Supported values are defined in `packages/shared`:
+CRM и extension отправляют выбранный движок в каждом запросе. Поддерживаемые значения описаны в `packages/shared`:
 
-- `mlx-whisper`: local MLX Whisper for Apple Silicon GPU/Metal acceleration.
-- `openai-whisper`: local OpenAI Whisper CLI.
+- `mlx-whisper`: локальный MLX Whisper для Apple Silicon GPU/Metal acceleration.
+- `openai-whisper`: локальный OpenAI Whisper CLI.
 - `openai`: OpenAI Audio Transcriptions API.
-- `local-stdin`: stdin-capable local Whisper command.
+- `local-stdin`: локальная Whisper-команда с поддержкой stdin.
 
-Example `apps/api/.env` values:
+Пример значений в `apps/api/.env`:
 
 ```env
 TRANSCRIPTION_ENGINE=openai-whisper
@@ -103,7 +103,7 @@ MLX_WHISPER_COMMAND=/Users/your-user/.local/bin/mlx_whisper
 MLX_WHISPER_ARGS={input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}
 ```
 
-For OpenAI API fallback:
+OpenAI API fallback:
 
 ```env
 TRANSCRIPTION_ENGINE=openai
@@ -113,29 +113,29 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 
 ## API
 
-All request and response contracts live in `packages/shared`.
+Все контракты запросов и ответов лежат в `packages/shared`.
 
-| Method | Path | Purpose |
+| Метод | Путь | Назначение |
 | --- | --- | --- |
-| `GET` | `/health` | API health |
-| `POST` | `/transcribe/url` | Start URL transcription |
-| `POST` | `/transcribe/file` | Start uploaded file transcription |
-| `GET` | `/transcribe/history` | Read saved history |
-| `GET` | `/transcribe/jobs/:id/events` | SSE progress stream |
-| `POST` | `/videos/formats` | List available video formats |
-| `POST` | `/videos/download` | Download selected format to `downloads/` |
+| `GET` | `/health` | Health-check API |
+| `POST` | `/transcribe/url` | Запустить транскрибацию URL |
+| `POST` | `/transcribe/file` | Запустить транскрибацию загруженного файла |
+| `GET` | `/transcribe/history` | Прочитать сохраненную историю |
+| `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |
+| `POST` | `/videos/formats` | Получить доступные форматы видео |
+| `POST` | `/videos/download` | Скачать выбранный формат в `downloads/` |
 
-## Project Structure
+## Структура проекта
 
 ```txt
 apps/
-  api/          Express API and media pipeline
+  api/          Express API и media pipeline
   crm/          Next.js CRM UI
   extension/    WXT React Chrome extension
 packages/
-  api-client/   fetch client for API calls
-  shared/       Zod schemas and shared types
-  ui/           shared shadcn-style UI components
+  api-client/   fetch-клиент для API-вызовов
+  shared/       Zod-схемы и общие типы
+  ui/           общие shadcn-style UI-компоненты
 source/
 tmp/
 output/
@@ -143,4 +143,4 @@ downloads/
 docs/agent/
 ```
 
-Agent-facing project knowledge lives in `docs/agent/`.
+Агентская документация проекта лежит в `docs/agent/`.

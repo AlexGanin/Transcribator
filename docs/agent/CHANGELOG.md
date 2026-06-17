@@ -1,28 +1,30 @@
-# Agent Changelog
+# Агентский changelog
 
-This changelog tracks agent-facing documentation and project-knowledge changes.
+Этот changelog хранит агентские изменения документации и проектных знаний.
 
 ## 2026-06-17
 
-- Changed: moved `packages/ui` component implementations into per-component folders with `index.tsx` entry files for future Storybook and local component artifacts.
-- Fixed: CRM source selector now remounts URL and file inputs separately to avoid React controlled/uncontrolled warnings.
+- Изменено: зафиксировано правило, что проектные правила и агентская документация пишутся на русском языке.
+- Изменено: задокументирован формат commit request с префиксом ветки и обязательным push сразу после коммита.
+- Изменено: реализации компонентов `packages/ui` перенесены в отдельные папки с `index.tsx`, чтобы рядом можно было хранить Storybook и локальные component artifacts.
+- Исправлено: CRM source selector теперь отдельно монтирует URL и file inputs, чтобы избежать React controlled/uncontrolled warnings.
 
 ## 2026-06-16
 
-- Changed: migrated the repository to a pnpm workspace with `apps/api`, `apps/crm`, `apps/extension`, `packages/shared`, `packages/api-client` and `packages/ui`.
-- Changed: moved Express API code to `apps/api` while keeping transcription, video download, uploads, history and SSE logic in Express.
-- Added: `packages/shared` Zod contracts for API requests, responses, progress events, engines, history and video downloads.
-- Added: `packages/api-client` fetch client for CRM and extension API calls.
-- Added: `packages/ui` shared shadcn-style React components on Tailwind and Radix primitives.
-- Added: Next.js App Router CRM with transcription, file upload, engine selection, SSE progress, history and video download flows.
-- Added: WXT React Manifest V3 extension scaffold with popup, background service worker and YouTube content script with Shadow DOM isolation.
-- Removed: legacy Vite `client/`, npm-era `server/` root and old npm lockfiles after `pnpm install` completed.
-- Removed: stale superpowers plan/spec files that described the old Vite and root `server/` architecture.
-- Docs: updated README, project map, infrastructure and workflow documentation for the workspace layout.
+- Изменено: репозиторий переведен на pnpm workspace с `apps/api`, `apps/crm`, `apps/extension`, `packages/shared`, `packages/api-client` и `packages/ui`.
+- Изменено: Express API перенесен в `apps/api`, при этом transcription, video download, uploads, history и SSE logic остались в Express.
+- Добавлено: `packages/shared` с Zod-контрактами для API requests, responses, progress events, engines, history и video downloads.
+- Добавлено: `packages/api-client` как fetch client для API-вызовов из CRM и extension.
+- Добавлено: `packages/ui` с общими shadcn-style React components на Tailwind и Radix primitives.
+- Добавлено: Next.js App Router CRM с transcription, file upload, engine selection, SSE progress, history и video download flows.
+- Добавлено: WXT React Manifest V3 extension scaffold с popup, background service worker и YouTube content script с Shadow DOM isolation.
+- Удалено: legacy Vite `client/`, npm-era root `server/` и старые npm lockfiles после успешного `pnpm install`.
+- Удалено: устаревшие superpowers plan/spec files, которые описывали старую архитектуру Vite и root `server/`.
+- Документация: обновлены README, project map, infrastructure и workflow под workspace-структуру.
 
 ## 2026-06-15
 
-- Added: initial `docs/agent/` self-documentation set.
-- Documented: project map, infrastructure, ports, commands, env vars, runtime paths, API routes, data flow, and agent workflow.
-- Ignored: local `.next/` generated artifacts so agent status checks stay focused.
-- Verified: documentation was derived from current repository files and runtime scripts.
+- Добавлено: начальный набор самодокументации `docs/agent/`.
+- Задокументировано: project map, infrastructure, ports, commands, env vars, runtime paths, API routes, data flow и agent workflow.
+- Игнорируется: локальные `.next/` generated artifacts, чтобы agent status checks оставались сфокусированными.
+- Проверено: документация была выведена из текущих файлов репозитория и runtime scripts.

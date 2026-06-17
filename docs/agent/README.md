@@ -1,35 +1,35 @@
-# Agent Documentation
+# Документация для агентов
 
-This directory is the project self-documentation layer for agentic work on Transcribator.
-Read it before making non-trivial changes, and keep it current after every meaningful edit.
+Эта папка является слоем самодокументации проекта Transcribator для агентской работы.
+Читай ее перед нетривиальными изменениями и обновляй после каждой значимой правки.
 
-## Start Here
+## С чего начать
 
-- `PROJECT_MAP.md` explains repository layout, file ownership and runtime data flow.
-- `INFRASTRUCTURE.md` explains ports, commands, environment variables, external tools and runtime directories.
-- `WORKFLOW.md` explains how agents should inspect, edit, verify, document and commit work.
-- `CHANGELOG.md` is the agent-facing log of structural and behavioral changes.
+- `PROJECT_MAP.md` описывает структуру репозитория, зоны ответственности файлов и runtime data flow.
+- `INFRASTRUCTURE.md` описывает порты, команды, переменные окружения, внешние инструменты и runtime-директории.
+- `WORKFLOW.md` описывает, как агентам нужно инспектировать, редактировать, проверять, документировать и коммитить изменения.
+- `CHANGELOG.md` хранит агентский журнал структурных и поведенческих изменений.
 
-## Project Summary
+## Кратко о проекте
 
-Transcribator is now a pnpm workspace:
+Transcribator сейчас является pnpm workspace:
 
-- `apps/api`: Express API on `http://localhost:3001`.
-- `apps/crm`: Next.js CRM on `http://localhost:3002`.
+- `apps/api`: Express API на `http://localhost:3001`.
+- `apps/crm`: Next.js CRM на `http://localhost:3002`.
 - `apps/extension`: WXT React Manifest V3 extension.
-- `packages/shared`: Zod contracts and shared DTO types.
-- `packages/api-client`: fetch client used by browser surfaces.
-- `packages/ui`: shared shadcn-style React UI components.
+- `packages/shared`: Zod-контракты и общие DTO-типы.
+- `packages/api-client`: fetch-клиент для браузерных поверхностей.
+- `packages/ui`: общие shadcn-style React UI-компоненты.
 
-The Express API remains the owner of media work: `yt-dlp`, `ffmpeg`, Whisper engines, uploads, SSE progress, history and video downloads. Runtime files stay in root-level `source/`, `tmp/`, `output/` and `downloads/`.
+Express API остается владельцем всей media-логики: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, SSE progress, история и скачивание видео. Runtime-файлы остаются в корневых `source/`, `tmp/`, `output/` и `downloads/`.
 
-## Documentation Update Rule
+## Правило обновления документации
 
-When a change affects project behavior, update at least one of these files:
+Когда изменение влияет на поведение проекта, обнови минимум один из этих файлов:
 
-- Update `PROJECT_MAP.md` when files, folders, APIs, or responsibilities change.
-- Update `INFRASTRUCTURE.md` when ports, commands, env vars, external tools, or runtime paths change.
-- Update `WORKFLOW.md` when the preferred agent process or verification steps change.
-- Append `CHANGELOG.md` for every meaningful agent-visible change.
+- Обнови `PROJECT_MAP.md`, если изменились файлы, папки, API или зоны ответственности.
+- Обнови `INFRASTRUCTURE.md`, если изменились порты, команды, env vars, внешние инструменты или runtime paths.
+- Обнови `WORKFLOW.md`, если изменился предпочтительный агентский процесс или шаги проверки.
+- Добавь запись в `CHANGELOG.md` для каждого значимого агентски-видимого изменения.
 
-Small typo fixes do not need a changelog entry unless they clarify important behavior.
+Мелкие исправления опечаток не требуют записи в changelog, если они не уточняют важное поведение.
