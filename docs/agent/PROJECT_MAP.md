@@ -14,10 +14,11 @@ Transcribator
     api-client/   fetch-based API client
     shared/       Zod schemas, DTOs и общие types
     ui/           общие shadcn-style React components и Storybook UI Kit
-  source/         Runtime-копии загруженных source files
-  tmp/            Runtime temporary uploads, WAV files и CLI output folders
-  output/         Runtime transcript files и history.json
-  downloads/      Runtime downloaded YouTube videos
+  runtime/
+    source/       Runtime-копии загруженных source files
+    tmp/          Runtime temporary uploads, WAV files и CLI output folders
+    output/       Runtime transcript files и history.json
+    downloads/    Runtime downloaded YouTube videos
   docs/agent/     Агентская документация проекта
   package.json    Корневые pnpm workspace commands
   pnpm-lock.yaml  Workspace lockfile
@@ -36,7 +37,7 @@ Transcribator
   - Общие строгие TypeScript-настройки для новых apps и packages.
 
 - `.gitignore`
-  - Игнорирует dependency folders, Next/WXT build output, app/package `dist/` folders и runtime output в `downloads/`, `source/`, `output/`, `tmp/`.
+  - Игнорирует dependency folders, Next/WXT build output, app/package `dist/` folders и runtime output в `runtime/`, кроме `.gitkeep` files.
 
 - `README.md`
   - Пользовательский обзор проекта, установка, запуск, API и архитектурные заметки.
@@ -75,17 +76,17 @@ apps/api
   - In-memory job registry и event emitter layer.
   - Асинхронно запускает transcription tasks.
   - Хранит live events для SSE replay.
-  - Пишет историю запусков в корневой `output/history.json`.
+  - Пишет историю запусков в `runtime/output/history.json`.
 
 - `src/pipeline.ts`
   - Основной transcription pipeline.
-  - Использует корневые `source/`, `tmp/` и `output/`.
+  - Использует `runtime/source/`, `runtime/tmp/` и `runtime/output/`.
   - Запускает `yt-dlp`, `ffmpeg`, локальные Whisper engines или OpenAI Audio Transcriptions.
   - Отправляет progress stages в `jobs.ts`.
 
 - `src/videoDownload.ts`
   - Читает доступные video formats через `yt-dlp --dump-json`.
-  - Скачивает выбранные formats в корневую `downloads/`.
+  - Скачивает выбранные formats в `runtime/downloads/`.
 
 - `src/errors.ts`
   - Содержит `HttpError` с `statusCode` и guard для error middleware.
@@ -167,10 +168,10 @@ apps/extension
 
 ## Runtime-директории
 
-- `source/`: safe-name copies загруженных source files.
-- `tmp/`: multer uploads, generated WAV files и Whisper output folders.
-- `output/`: итоговые transcript `.txt` files и `history.json`.
-- `downloads/`: скачанные YouTube videos.
+- `runtime/source/`: safe-name copies загруженных source files.
+- `runtime/tmp/`: multer uploads, generated WAV files и Whisper output folders.
+- `runtime/output/`: итоговые transcript `.txt` files и `history.json`.
+- `runtime/downloads/`: скачанные YouTube videos.
 
 Из этих директорий в git должны попадать только `.gitkeep` files.
 
@@ -189,8 +190,8 @@ CRM или extension
   -> ffmpeg stdin/stdout
   -> selected transcription engine
   -> postProcessTranscript + summarizeTranscript
-  -> output/<timestamp>.txt
-  -> output/history.json
+  -> runtime/output/<timestamp>.txt
+  -> runtime/output/history.json
   -> SSE progress/done events
   -> CRM result panes и history
 ```
@@ -203,13 +204,13 @@ CRM multipart upload
   -> POST /transcribe/file
   -> shared Zod validation for form fields
   -> multer temp upload
-  -> source/<safe_original_filename>
+  -> runtime/source/<safe_original_filename>
   -> jobs.createJob
   -> pipeline.transcribeFile
   -> ffmpeg conversion
   -> selected transcription engine
-  -> output/<timestamp>.txt
-  -> output/history.json
+  -> runtime/output/<timestamp>.txt
+  -> runtime/output/history.json
   -> SSE progress/done events
 ```
 
@@ -225,7 +226,7 @@ CRM video URL
   -> CRM format selector
   -> POST /videos/download
   -> videoDownload.downloadVideo
-  -> downloads/<safe_title-formatId>.<ext>
+  -> runtime/downloads/<safe_title-formatId>.<ext>
 ```
 
 ## Generated и локальные файлы
@@ -239,5 +240,5 @@ CRM video URL
 - `apps/*/dist/`
 - `packages/*/dist/`
 - `packages/*/storybook-static/`
-- Runtime contents в `downloads/`, `source/`, `tmp/`, `output/`
+- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, кроме `.gitkeep`
 - Любой `.env` file

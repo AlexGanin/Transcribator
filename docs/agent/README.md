@@ -21,7 +21,7 @@ Transcribator сейчас является pnpm workspace:
 - `packages/api-client`: fetch-клиент для браузерных поверхностей.
 - `packages/ui`: общие shadcn-style React UI-компоненты и Storybook UI Kit.
 
-Express API остается владельцем всей media-логики: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, SSE progress, история и скачивание видео. Runtime-файлы остаются в корневых `source/`, `tmp/`, `output/` и `downloads/`.
+Express API остается владельцем всей media-логики: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, SSE progress, история и скачивание видео. Runtime-файлы лежат в корневой папке `runtime/`: `runtime/source/`, `runtime/tmp/`, `runtime/output/` и `runtime/downloads/`.
 
 ## Правило обновления документации
 

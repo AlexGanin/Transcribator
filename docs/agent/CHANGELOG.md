@@ -4,6 +4,7 @@
 
 ## 2026-06-17
 
+- Изменено: runtime-папки `source`, `tmp`, `output` и `downloads` перенесены в общий корневой каталог `runtime/`; код API и документация обновлены на новые пути.
 - Изменено: базовый runtime обновлен до Node.js 24.x и pnpm 11.x.
 - Изменено: обновлены Express до 5.x, OpenAI SDK до 6.x, dotenv, concurrently и Node types 24.x; WXT tooling перенесен в devDependencies extension.
 - Добавлено: минимальный pnpm override для `electron-to-chromium@1.5.373`, чтобы пройти active minimum release age policy pnpm 11.

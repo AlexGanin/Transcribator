@@ -18,9 +18,10 @@ import type {
 } from './types.js';
 
 const ROOT_DIR = path.resolve(process.cwd(), '../..');
-const SOURCE_DIR = path.join(ROOT_DIR, 'source');
-const OUTPUT_DIR = path.join(ROOT_DIR, 'output');
-const TMP_DIR = path.join(ROOT_DIR, 'tmp');
+const RUNTIME_DIR = path.join(ROOT_DIR, 'runtime');
+const SOURCE_DIR = path.join(RUNTIME_DIR, 'source');
+const OUTPUT_DIR = path.join(RUNTIME_DIR, 'output');
+const TMP_DIR = path.join(RUNTIME_DIR, 'tmp');
 const DEFAULT_TIMEOUT_MS = Number(process.env.TRANSCRIBE_TIMEOUT_MS || 15 * 60 * 1000);
 const ENGINE_OPENAI_WHISPER = 'openai-whisper';
 const ENGINE_MLX_WHISPER = 'mlx-whisper';

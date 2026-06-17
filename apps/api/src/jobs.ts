@@ -16,7 +16,7 @@ import type {
 
 const jobs = new Map<string, Job>();
 const MAX_JOB_AGE_MS = 60 * 60 * 1000;
-const HISTORY_PATH = path.resolve(process.cwd(), '../..', 'output', 'history.json');
+const HISTORY_PATH = path.resolve(process.cwd(), '../..', 'runtime', 'output', 'history.json');
 
 export function createJob(task: JobTask, metadata: JobMetadata = {}): Job {
   const id = randomUUID();

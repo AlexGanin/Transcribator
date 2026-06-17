@@ -57,12 +57,12 @@ API:
 http://localhost:3001
 ```
 
-Runtime-файлы пишутся в корневые папки:
+Runtime-файлы пишутся в корневую папку `runtime/`:
 
-- `source/`: копии загруженных исходных медиа
-- `tmp/`: uploads, WAV-файлы и папки вывода Whisper
-- `output/`: транскрипты и `history.json`
-- `downloads/`: скачанные видео
+- `runtime/source/`: копии загруженных исходных медиа
+- `runtime/tmp/`: uploads, WAV-файлы и папки вывода Whisper
+- `runtime/output/`: транскрипты и `history.json`
+- `runtime/downloads/`: скачанные видео
 
 ## Команды
 
@@ -133,7 +133,7 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `GET` | `/transcribe/history` | Прочитать сохраненную историю |
 | `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |
 | `POST` | `/videos/formats` | Получить доступные форматы видео |
-| `POST` | `/videos/download` | Скачать выбранный формат в `downloads/` |
+| `POST` | `/videos/download` | Скачать выбранный формат в `runtime/downloads/` |
 
 ## Структура проекта
 
@@ -146,10 +146,11 @@ packages/
   api-client/   fetch-клиент для API-вызовов
   shared/       Zod-схемы и общие типы
   ui/           общие shadcn-style UI-компоненты и Storybook
-source/
-tmp/
-output/
-downloads/
+runtime/
+  source/
+  tmp/
+  output/
+  downloads/
 docs/agent/
 ```
 

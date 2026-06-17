@@ -12,7 +12,8 @@ import type {
 import type { VideoDownloadResponse, VideoFormatsResponse } from '@transcribator/shared';
 
 const ROOT_DIR = path.resolve(process.cwd(), '../..');
-export const DOWNLOAD_DIR = path.join(ROOT_DIR, 'downloads');
+const RUNTIME_DIR = path.join(ROOT_DIR, 'runtime');
+export const DOWNLOAD_DIR = path.join(RUNTIME_DIR, 'downloads');
 
 export async function ensureDownloadDir(): Promise<void> {
   await mkdir(DOWNLOAD_DIR, { recursive: true });

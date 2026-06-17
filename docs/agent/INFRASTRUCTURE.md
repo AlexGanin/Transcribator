@@ -110,10 +110,10 @@ pipx install mlx-whisper
 
 | Путь | Владелец | Содержимое |
 | --- | --- | --- |
-| `source/` | `apps/api/src/pipeline.ts` | Safe-name copies загруженных source media |
-| `tmp/` | multer и pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
-| `output/` | pipeline и jobs | Итоговые transcript `.txt` files и `history.json` |
-| `downloads/` | video download API | Скачанные YouTube videos |
+| `runtime/source/` | `apps/api/src/pipeline.ts` | Safe-name copies загруженных source media |
+| `runtime/tmp/` | multer и pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
+| `runtime/output/` | pipeline и jobs | Итоговые transcript `.txt` files и `history.json` |
+| `runtime/downloads/` | video download API | Скачанные YouTube videos |
 
 Из этих директорий в git должны попадать только `.gitkeep` files.
 
@@ -127,7 +127,7 @@ pipx install mlx-whisper
 | `GET` | `/transcribe/history` | Вернуть сохраненные history entries |
 | `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream для job progress |
 | `POST` | `/videos/formats` | Вернуть доступные video download formats |
-| `POST` | `/videos/download` | Скачать выбранный video format в `downloads/` |
+| `POST` | `/videos/download` | Скачать выбранный video format в `runtime/downloads/` |
 
 Request и response schemas лежат в `packages/shared`.
 

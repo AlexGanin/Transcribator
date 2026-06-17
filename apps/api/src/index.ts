@@ -20,7 +20,7 @@ import type { ProgressEvent, TranscriptionEngine } from '@transcribator/shared';
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const host = process.env.HOST || '127.0.0.1';
-const uploadDir = path.resolve(process.cwd(), '../..', 'tmp', 'uploads');
+const uploadDir = path.resolve(process.cwd(), '../..', 'runtime', 'tmp', 'uploads');
 const maxUploadSizeGb = parsePositiveNumberEnv('MAX_UPLOAD_SIZE_GB', 10);
 const maxUploadSizeBytes = Math.floor(maxUploadSizeGb * 1024 ** 3);
 
