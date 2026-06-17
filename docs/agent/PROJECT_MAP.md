@@ -36,7 +36,7 @@ Transcribator
   - Общие строгие TypeScript-настройки для новых apps и packages.
 
 - `.gitignore`
-  - Игнорирует dependency folders, Next/WXT build output, package `dist/` folders и runtime output в `downloads/`, `source/`, `output/`, `tmp/`.
+  - Игнорирует dependency folders, Next/WXT build output, app/package `dist/` folders и runtime output в `downloads/`, `source/`, `output/`, `tmp/`.
 
 - `README.md`
   - Пользовательский обзор проекта, установка, запуск, API и архитектурные заметки.
@@ -49,36 +49,49 @@ Transcribator
 apps/api
   .env.example
   package.json
+  tsconfig.json
   src
-    index.js
-    jobs.js
-    pipeline.js
-    postProcess.js
-    videoDownload.js
+    errors.ts
+    index.ts
+    jobs.ts
+    pipeline.ts
+    postProcess.ts
+    types.ts
+    videoDownload.ts
 ```
 
-- `src/index.js`
+- `tsconfig.json`
+  - Наследует корневый `tsconfig.base.json`.
+  - Использует `module` и `moduleResolution` `NodeNext`, `rootDir` `src`, `outDir` `dist` и Node types.
+
+- `src/index.ts`
   - Entry point Express app.
   - Загружает `apps/api/.env`.
   - Биндится к `HOST` и `PORT`, по умолчанию `127.0.0.1:3001`.
   - Настраивает CORS, JSON parsing, multer uploads, route handlers, SSE и error handling.
   - Валидирует request bodies схемами из `@transcribator/shared`.
 
-- `src/jobs.js`
+- `src/jobs.ts`
   - In-memory job registry и event emitter layer.
   - Асинхронно запускает transcription tasks.
   - Хранит live events для SSE replay.
   - Пишет историю запусков в корневой `output/history.json`.
 
-- `src/pipeline.js`
+- `src/pipeline.ts`
   - Основной transcription pipeline.
   - Использует корневые `source/`, `tmp/` и `output/`.
   - Запускает `yt-dlp`, `ffmpeg`, локальные Whisper engines или OpenAI Audio Transcriptions.
-  - Отправляет progress stages в `jobs.js`.
+  - Отправляет progress stages в `jobs.ts`.
 
-- `src/videoDownload.js`
+- `src/videoDownload.ts`
   - Читает доступные video formats через `yt-dlp --dump-json`.
   - Скачивает выбранные formats в корневую `downloads/`.
+
+- `src/errors.ts`
+  - Содержит `HttpError` с `statusCode` и guard для error middleware.
+
+- `src/types.ts`
+  - Содержит API runtime-типы: `Job`, `JobMetadata`, progress handlers, transcription options, child process metadata и yt-dlp metadata shapes.
 
 ### `apps/crm`
 
@@ -88,6 +101,8 @@ apps/crm
     globals.css
     layout.tsx
     page.tsx
+  next.config.ts
+  postcss.config.ts
   src/components/transcribator-app.tsx
 ```
 
@@ -221,6 +236,7 @@ CRM video URL
 - `apps/crm/.next/`
 - `apps/extension/.wxt/`
 - `apps/extension/.output/`
+- `apps/*/dist/`
 - `packages/*/dist/`
 - `packages/*/storybook-static/`
 - Runtime contents в `downloads/`, `source/`, `tmp/`, `output/`

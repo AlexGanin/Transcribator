@@ -6,6 +6,16 @@ import { pipeline as streamPipeline } from 'node:stream/promises';
 import { once } from 'node:events';
 import OpenAI from 'openai';
 import { postProcessTranscript, summarizeTranscript } from './postProcess.js';
+import { createHttpError } from './errors.js';
+import type {
+  ChildProcessMeta,
+  LoggedChildProcess,
+  PipelineResult,
+  SpawnLoggedOptions,
+  TranscriptFileParts,
+  TranscriptFinalizeMeta,
+  TranscriptionOptions
+} from './types.js';
 
 const ROOT_DIR = path.resolve(process.cwd(), '../..');
 const SOURCE_DIR = path.join(ROOT_DIR, 'source');
@@ -17,7 +27,7 @@ const ENGINE_MLX_WHISPER = 'mlx-whisper';
 const ENGINE_OPENAI_API = 'openai';
 const ENGINE_LOCAL_STDIN = 'local-stdin';
 
-export async function ensureRuntimeDirs() {
+export async function ensureRuntimeDirs(): Promise<void> {
   await Promise.all([
     mkdir(SOURCE_DIR, { recursive: true }),
     mkdir(OUTPUT_DIR, { recursive: true }),
@@ -25,7 +35,7 @@ export async function ensureRuntimeDirs() {
   ]);
 }
 
-export async function transcribeUrl(inputUrl, options = {}) {
+export async function transcribeUrl(inputUrl: string, options: TranscriptionOptions = {}) {
   if (!inputUrl || typeof inputUrl !== 'string') {
     throw createHttpError(400, 'URL is required.');
   }
@@ -47,7 +57,7 @@ export async function transcribeUrl(inputUrl, options = {}) {
   return transcribeFromUrlStream(inputUrl, options);
 }
 
-export async function transcribeFile(file, options = {}) {
+export async function transcribeFile(file: Express.Multer.File | undefined, options: TranscriptionOptions = {}) {
   if (!file) {
     throw createHttpError(400, 'Audio or video file is required.');
   }
@@ -62,7 +72,7 @@ export async function transcribeFile(file, options = {}) {
   return transcribeFromFileStream(savedSourcePath, safeOriginalName, options);
 }
 
-async function transcribeFromUrlStream(inputUrl, options) {
+async function transcribeFromUrlStream(inputUrl: string, options: TranscriptionOptions) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
@@ -80,7 +90,7 @@ async function transcribeFromUrlStream(inputUrl, options) {
   return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine }, options);
 }
 
-async function transcribeFromFileStream(sourcePath, originalName, options) {
+async function transcribeFromFileStream(sourcePath: string, originalName: string, options: TranscriptionOptions) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
@@ -98,7 +108,7 @@ async function transcribeFromFileStream(sourcePath, originalName, options) {
   return finalizeTranscript(rawText, outputPath, { source: originalName, engine }, options);
 }
 
-async function runUrlToWav(inputUrl, wavPath, options) {
+async function runUrlToWav(inputUrl: string, wavPath: string, options: TranscriptionOptions): Promise<void> {
   emitProgress(options, 'download', 1, 'Downloading audio');
   const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl], {
     onStderr: (line) => {
@@ -132,7 +142,7 @@ async function runUrlToWav(inputUrl, wavPath, options) {
   emitProgress(options, 'download', 100, 'Audio downloaded and converted');
 }
 
-async function runFileToWav(sourcePath, wavPath, options) {
+async function runFileToWav(sourcePath: string, wavPath: string, options: TranscriptionOptions): Promise<void> {
   emitProgress(options, 'convert', 5, 'Converting uploaded file');
   const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
@@ -156,7 +166,7 @@ async function runFileToWav(sourcePath, wavPath, options) {
   emitProgress(options, 'convert', 100, 'File converted');
 }
 
-async function runUrlToWhisperStdin(inputUrl, timestamp, options) {
+async function runUrlToWhisperStdin(inputUrl: string, timestamp: string, options: TranscriptionOptions): Promise<string> {
   emitProgress(options, 'download', 1, 'Downloading audio');
   const ytdlp = spawnLogged(getYtDlpCommand(), ['-f', 'bestaudio', '-o', '-', inputUrl], {
     onStderr: (line) => {
@@ -193,7 +203,7 @@ async function runUrlToWhisperStdin(inputUrl, timestamp, options) {
   return readWhisperResult(result, timestamp);
 }
 
-async function runFileToWhisperStdin(sourcePath, timestamp, options) {
+async function runFileToWhisperStdin(sourcePath: string, timestamp: string, options: TranscriptionOptions): Promise<string> {
   emitProgress(options, 'convert', 5, 'Converting uploaded file');
   const ffmpeg = spawnLogged(getFfmpegCommand(), [
     '-hide_banner',
@@ -221,7 +231,7 @@ async function runFileToWhisperStdin(sourcePath, timestamp, options) {
   return readWhisperResult(result, timestamp);
 }
 
-async function transcribeWavFile(wavPath, timestamp, options) {
+async function transcribeWavFile(wavPath: string, timestamp: string, options: TranscriptionOptions): Promise<string> {
   const engine = getTranscriptionEngine(options);
   emitProgress(options, 'transcribe', 5, 'Transcribing audio');
 
@@ -240,7 +250,7 @@ async function transcribeWavFile(wavPath, timestamp, options) {
   return readWhisperResult(result, timestamp);
 }
 
-async function spawnOpenAIWhisperForInput(input, timestamp) {
+async function spawnOpenAIWhisperForInput(input: string, timestamp: string): Promise<LoggedChildProcess> {
   await assertCommandAvailable(getWhisperCommand());
   const command = getWhisperCommand();
   const outputDir = path.join(TMP_DIR, `whisper-${timestamp}`);
@@ -253,7 +263,7 @@ async function spawnOpenAIWhisperForInput(input, timestamp) {
   return spawnLogged(command, args, { captureStdout: true, extra: { outputDir } });
 }
 
-async function spawnMlxWhisperForInput(input, timestamp) {
+async function spawnMlxWhisperForInput(input: string, timestamp: string): Promise<LoggedChildProcess> {
   await assertCommandAvailable(getMlxWhisperCommand());
   const command = getMlxWhisperCommand();
   const outputDir = path.join(TMP_DIR, `mlx-whisper-${timestamp}`);
@@ -269,7 +279,7 @@ async function spawnMlxWhisperForInput(input, timestamp) {
   return spawnLogged(command, args, { captureStdout: true, extra: { outputDir } });
 }
 
-async function transcribeWithOpenAI(wavPath) {
+async function transcribeWithOpenAI(wavPath: string): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
     throw createHttpError(500, 'OPENAI_API_KEY is required when TRANSCRIPTION_ENGINE=openai.');
   }
@@ -283,7 +293,12 @@ async function transcribeWithOpenAI(wavPath) {
   return response.text || '';
 }
 
-async function finalizeTranscript(rawText, outputPath, meta, options) {
+async function finalizeTranscript(
+  rawText: string,
+  outputPath: string,
+  meta: TranscriptFinalizeMeta,
+  options: TranscriptionOptions
+) {
   emitProgress(options, 'postprocess', 10, 'Post-processing transcript');
   const rawTranscript = normalizeRawTranscript(rawText);
   const cleanTranscript = postProcessTranscript(rawTranscript);
@@ -303,21 +318,22 @@ async function finalizeTranscript(rawText, outputPath, meta, options) {
   };
 }
 
-async function readWhisperResult(result, timestamp) {
+async function readWhisperResult(result: PipelineResult, timestamp: string): Promise<string> {
   const whisper = result.processes.find((processInfo) => processInfo.extra?.outputDir);
   const outputDir = whisper?.extra?.outputDir;
 
   if (outputDir) {
     const candidates = await findTextFiles(outputDir);
-    if (candidates.length > 0) {
-      return readFile(candidates[0], 'utf8');
+    const [firstCandidate] = candidates;
+    if (firstCandidate) {
+      return readFile(firstCandidate, 'utf8');
     }
   }
 
   return result.stdout.join('\n').trim();
 }
 
-async function findTextFiles(dir) {
+async function findTextFiles(dir: string): Promise<string[]> {
   try {
     const names = await readdir(dir);
     return names
@@ -328,11 +344,11 @@ async function findTextFiles(dir) {
   }
 }
 
-async function assertCommandAvailable(command) {
+async function assertCommandAvailable(command: string): Promise<void> {
   const lookupCommand = process.platform === 'win32' ? 'where' : 'which';
   const checker = spawn(lookupCommand, [command], { stdio: ['ignore', 'ignore', 'ignore'] });
 
-  const result = await new Promise((resolve) => {
+  const result = await new Promise<{ error?: Error | undefined; code?: number | null | undefined }>((resolve) => {
     checker.once('error', (error) => resolve({ error }));
     checker.once('close', (code) => resolve({ code }));
   });
@@ -346,33 +362,33 @@ async function assertCommandAvailable(command) {
   }
 }
 
-function getYtDlpCommand() {
+function getYtDlpCommand(): string {
   return process.env.YTDLP_COMMAND || 'yt-dlp';
 }
 
-function getFfmpegCommand() {
+function getFfmpegCommand(): string {
   return process.env.FFMPEG_COMMAND || 'ffmpeg';
 }
 
-function getWhisperCommand() {
+function getWhisperCommand(): string {
   return process.env.WHISPER_COMMAND || 'whisper';
 }
 
-function getMlxWhisperCommand() {
+function getMlxWhisperCommand(): string {
   return process.env.MLX_WHISPER_COMMAND || 'mlx_whisper';
 }
 
-function getTranscriptionEngine(options = {}) {
+function getTranscriptionEngine(options: TranscriptionOptions = {}): string {
   const engine = options.engine || process.env.TRANSCRIPTION_ENGINE || ENGINE_OPENAI_WHISPER;
   if (engine === 'local-file') return ENGINE_OPENAI_WHISPER;
   return engine;
 }
 
-function spawnLogged(command, args, options = {}) {
+function spawnLogged(command: string, args: string[], options: SpawnLoggedOptions = {}): LoggedChildProcess {
   const child = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: buildChildEnv()
-  });
+  }) as LoggedChildProcess;
 
   child.meta = {
     command,
@@ -391,7 +407,7 @@ function spawnLogged(command, args, options = {}) {
 
   if (options.captureStdout) {
     child.stdout.on('data', (chunk) => {
-      child.meta.stdout.push(chunk.toString());
+      child.meta.stdout?.push(chunk.toString());
     });
   }
 
@@ -402,7 +418,7 @@ function spawnLogged(command, args, options = {}) {
   return child;
 }
 
-function emitProgress(options, stage, progress, message) {
+function emitProgress(options: TranscriptionOptions, stage: string, progress: number, message: string): void {
   options.onProgress?.({
     stage,
     progress: Math.max(0, Math.min(100, Math.round(progress))),
@@ -410,12 +426,12 @@ function emitProgress(options, stage, progress, message) {
   });
 }
 
-function parseYtDlpProgress(line) {
+function parseYtDlpProgress(line: string): number | null {
   const match = line.match(/\[download]\s+(\d+(?:\.\d+)?)%/);
   return match ? Number(match[1]) : null;
 }
 
-function buildChildEnv() {
+function buildChildEnv(): NodeJS.ProcessEnv {
   const pathParts = [
     path.dirname(getYtDlpCommand()),
     path.dirname(getFfmpegCommand()),
@@ -430,7 +446,7 @@ function buildChildEnv() {
   };
 }
 
-async function waitForPipeline(children, writable) {
+async function waitForPipeline(children: LoggedChildProcess[], writable?: NodeJS.WritableStream): Promise<PipelineResult> {
   const timeoutMs = DEFAULT_TIMEOUT_MS;
   const timer = setTimeout(() => {
     for (const child of children) {
@@ -452,7 +468,7 @@ async function waitForPipeline(children, writable) {
   }
 }
 
-async function waitForChild(child) {
+async function waitForChild(child: LoggedChildProcess): Promise<void> {
   const [code, signal] = await once(child, 'close');
   if (code !== 0) {
     const stderr = child.meta.stderr.join('').trim();
@@ -461,30 +477,24 @@ async function waitForChild(child) {
   }
 }
 
-function createHttpError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-function timestampForFile() {
+function timestampForFile(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
-function safeFileName(fileName) {
+function safeFileName(fileName: string): string {
   return path
     .basename(fileName)
     .replace(/[^\w.-]+/g, '_')
     .replace(/^_+/, '') || `upload-${timestampForFile()}`;
 }
 
-function normalizeRawTranscript(rawText) {
+function normalizeRawTranscript(rawText: string): string {
   return String(rawText || '')
     .replace(/\r\n/g, '\n')
     .trim();
 }
 
-function formatTranscriptFile({ summary, cleanTranscript, rawTranscript }) {
+function formatTranscriptFile({ summary, cleanTranscript, rawTranscript }: TranscriptFileParts): string {
   return [
     '# Summary',
     summary || 'No summary available.',

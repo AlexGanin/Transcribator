@@ -4,6 +4,9 @@
 
 ## 2026-06-17
 
+- Изменено: API `apps/api/src` переведен с ручного JavaScript на TypeScript с NodeNext `tsconfig.json`, `tsx` dev runner и `tsc` build.
+- Изменено: CRM configs `next.config` и `postcss.config` переведены с `.mjs` на TypeScript.
+- Игнорируется: generated output `apps/*/dist/` после TypeScript build приложений.
 - Добавлено: Storybook UI Kit внутри `packages/ui` с историями всех экспортируемых компонентов и паттернами Transcribator.
 - Изменено: корневые команды дополнены `pnpm storybook` и `pnpm build-storybook`, которые прокидываются в `@transcribator/ui`.
 - Игнорируется: generated output `packages/*/storybook-static/` после Storybook build.

@@ -1,10 +1,10 @@
-const NOISE_PATTERNS = [
+const NOISE_PATTERNS: RegExp[] = [
   /\[(music|applause|laughter|noise|silence)\]/gi,
   /\((music|applause|laughter|noise|silence)\)/gi,
   /<\|[^>]+?\|>/g
 ];
 
-export function postProcessTranscript(rawText) {
+export function postProcessTranscript(rawText: string): string {
   if (!rawText || typeof rawText !== 'string') {
     return '';
   }
@@ -39,7 +39,7 @@ export function postProcessTranscript(rawText) {
     .join(' ');
 
   const sentences = text.split(/(?<=[.!?])\s+/);
-  const paragraphs = [];
+  const paragraphs: string[] = [];
 
   for (let index = 0; index < sentences.length; index += 3) {
     paragraphs.push(sentences.slice(index, index + 3).join(' '));
@@ -48,7 +48,7 @@ export function postProcessTranscript(rawText) {
   return paragraphs.join('\n\n');
 }
 
-export function summarizeTranscript(text) {
+export function summarizeTranscript(text: string): string {
   if (!text || typeof text !== 'string') {
     return '';
   }
@@ -63,17 +63,26 @@ export function summarizeTranscript(text) {
     return '';
   }
 
-  const selected = [];
+  const selected: string[] = [];
   const targetCount = Math.min(6, Math.max(3, Math.ceil(sentences.length * 0.12)));
 
-  selected.push(sentences[0]);
+  const firstSentence = sentences[0];
+  if (firstSentence) {
+    selected.push(firstSentence);
+  }
 
   if (sentences.length > 3) {
-    selected.push(sentences[Math.floor(sentences.length / 3)]);
+    const middleSentence = sentences[Math.floor(sentences.length / 3)];
+    if (middleSentence) {
+      selected.push(middleSentence);
+    }
   }
 
   if (sentences.length > 6) {
-    selected.push(sentences[Math.floor((sentences.length * 2) / 3)]);
+    const laterSentence = sentences[Math.floor((sentences.length * 2) / 3)];
+    if (laterSentence) {
+      selected.push(laterSentence);
+    }
   }
 
   for (const sentence of sentences) {

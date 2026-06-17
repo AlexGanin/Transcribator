@@ -1,15 +1,24 @@
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { createHttpError } from './errors.js';
+import type {
+  CommandResult,
+  NormalizedVideoFormat,
+  RunCommandOptions,
+  YtDlpVideoFormatObject,
+  YtDlpVideoInfo
+} from './types.js';
+import type { VideoDownloadResponse, VideoFormatsResponse } from '@transcribator/shared';
 
 const ROOT_DIR = path.resolve(process.cwd(), '../..');
 export const DOWNLOAD_DIR = path.join(ROOT_DIR, 'downloads');
 
-export async function ensureDownloadDir() {
+export async function ensureDownloadDir(): Promise<void> {
   await mkdir(DOWNLOAD_DIR, { recursive: true });
 }
 
-export async function getVideoFormats(inputUrl) {
+export async function getVideoFormats(inputUrl: string): Promise<VideoFormatsResponse> {
   assertHttpUrl(inputUrl);
   await assertCommandAvailable(getYtDlpCommand());
 
@@ -20,7 +29,7 @@ export async function getVideoFormats(inputUrl) {
   };
 }
 
-export async function downloadVideo(inputUrl, formatId) {
+export async function downloadVideo(inputUrl: string, formatId: string): Promise<VideoDownloadResponse> {
   assertHttpUrl(inputUrl);
   if (!formatId || typeof formatId !== 'string') {
     throw createHttpError(400, 'Video format is required.');
@@ -61,11 +70,11 @@ export async function downloadVideo(inputUrl, formatId) {
   };
 }
 
-export function normalizeFormats(formats) {
+export function normalizeFormats(formats: YtDlpVideoFormatObject[]): NormalizedVideoFormat[] {
   return formats
     .filter((format) => isVideoFormat(format))
     .map((format) => {
-      const hasAudio = format.acodec && format.acodec !== 'none';
+      const hasAudio = Boolean(format.acodec && format.acodec !== 'none');
       const size = format.filesize || format.filesize_approx || 0;
       const approximate = !format.filesize && Boolean(format.filesize_approx);
       const sizeLabel = size > 0 ? formatBytes(size, approximate) : '';
@@ -97,7 +106,7 @@ export function normalizeFormats(formats) {
     .sort((a, b) => (b.height || 0) - (a.height || 0) || sizeNumber(b.sizeLabel) - sizeNumber(a.sizeLabel));
 }
 
-export function safeDownloadFileName(title, ext) {
+export function safeDownloadFileName(title: string, ext: string): string {
   const cleanBase = String(title || 'video')
     .replace(/[\\/]+/g, '_')
     .replace(/[^\w.-]+/g, '_')
@@ -108,20 +117,24 @@ export function safeDownloadFileName(title, ext) {
   return `${cleanBase}.${cleanExt}`;
 }
 
-async function getVideoInfo(inputUrl) {
+async function getVideoInfo(inputUrl: string): Promise<YtDlpVideoInfo> {
   const result = await runCommand(getYtDlpCommand(), ['--dump-json', '--no-playlist', inputUrl]);
   try {
-    return JSON.parse(result.stdout);
+    const parsed: unknown = JSON.parse(result.stdout);
+    if (isYtDlpVideoInfo(parsed)) {
+      return parsed;
+    }
+    throw new Error('Invalid yt-dlp metadata shape.');
   } catch {
     throw createHttpError(500, 'Could not parse video metadata from yt-dlp.');
   }
 }
 
-function isVideoFormat(format) {
-  return format?.format_id && format.vcodec && format.vcodec !== 'none';
+function isVideoFormat(format: YtDlpVideoFormatObject): format is YtDlpVideoFormatObject & { format_id: string | number } {
+  return Boolean(format?.format_id && format.vcodec && format.vcodec !== 'none');
 }
 
-async function assertCommandAvailable(command) {
+async function assertCommandAvailable(command: string): Promise<void> {
   const lookupCommand = process.platform === 'win32' ? 'where' : 'which';
   const result = await runCommand(lookupCommand, [command], { allowFailure: true });
 
@@ -130,14 +143,14 @@ async function assertCommandAvailable(command) {
   }
 }
 
-function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
+function runCommand(command: string, args: string[], options: RunCommandOptions = {}): Promise<CommandResult> {
+  return new Promise<CommandResult>((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: buildChildEnv()
     });
-    const stdout = [];
-    const stderr = [];
+    const stdout: string[] = [];
+    const stderr: string[] = [];
 
     child.stdout.on('data', (chunk) => stdout.push(chunk.toString()));
     child.stderr.on('data', (chunk) => stderr.push(chunk.toString()));
@@ -165,11 +178,11 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-function getYtDlpCommand() {
+function getYtDlpCommand(): string {
   return process.env.YTDLP_COMMAND || 'yt-dlp';
 }
 
-function buildChildEnv() {
+function buildChildEnv(): NodeJS.ProcessEnv {
   const commandDir = path.dirname(getYtDlpCommand());
   const pathParts = [commandDir, process.env.PATH || ''].filter(Boolean);
   return {
@@ -178,12 +191,12 @@ function buildChildEnv() {
   };
 }
 
-function assertHttpUrl(inputUrl) {
+function assertHttpUrl(inputUrl: string): void {
   if (!inputUrl || typeof inputUrl !== 'string') {
     throw createHttpError(400, 'URL is required.');
   }
 
-  let parsed;
+  let parsed: URL;
   try {
     parsed = new URL(inputUrl);
   } catch {
@@ -195,18 +208,24 @@ function assertHttpUrl(inputUrl) {
   }
 }
 
-function formatBytes(bytes, approximate) {
+function formatBytes(bytes: number, approximate: boolean): string {
   const mb = bytes / 1024 / 1024;
   const value = mb >= 10 ? Math.round(mb) : Number(mb.toFixed(1));
   return `${approximate ? '~' : ''}${value} MB`;
 }
 
-function sizeNumber(label) {
+function sizeNumber(label: string): number {
   return Number(String(label).replace(/[^\d.]/g, '')) || 0;
 }
 
-function createHttpError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
+function isYtDlpVideoInfo(value: unknown): value is YtDlpVideoInfo {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const info = value as { title?: unknown; formats?: unknown };
+  return (
+    (info.title === undefined || typeof info.title === 'string') &&
+    (info.formats === undefined || Array.isArray(info.formats))
+  );
 }

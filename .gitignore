@@ -3,6 +3,7 @@ apps/*/node_modules/
 packages/*/node_modules/
 apps/crm/.next/
 apps/crm/out/
+apps/*/dist/
 apps/extension/.wxt/
 apps/extension/.output/
 packages/*/dist/

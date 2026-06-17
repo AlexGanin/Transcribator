@@ -31,7 +31,8 @@ rg -n "term-to-find" .
 - Держи общие контракты в `packages/shared` и используй Zod для runtime API validation.
 - Держи браузерные API-вызовы в `packages/api-client`; не добавляй туда React, Next, Chrome или Node-specific API.
 - Держи общий UI в `packages/ui`; не добавляй туда Next, Chrome или Node-specific API.
-- Не коммить generated files: `.next/`, `.wxt/`, package `dist/`, `source/*`, `tmp/*`, `output/*`, `downloads/*`.
+- Держи ручные исходники и конфиги TypeScript-first: не добавляй `.js`, `.jsx`, `.mjs` или `.cjs` файлы вне generated output и обычных asset-файлов.
+- Не коммить generated files: `.next/`, `.wxt/`, app/package `dist/`, `source/*`, `tmp/*`, `output/*`, `downloads/*`.
 - Держи `.env` файлы только локально.
 - Сохраняй текущее runtime-поведение, если пользователь явно не просит изменить его.
 - Предпочитай небольшие файлы с понятной ответственностью при добавлении нового кода.
@@ -44,7 +45,7 @@ rg -n "term-to-find" .
 
 | Тип изменения | Обязательная проверка |
 | --- | --- |
-| Поведение API на JS | `pnpm --filter @transcribator/api check` |
+| Поведение API на TypeScript | `pnpm --filter @transcribator/api typecheck` и `pnpm --filter @transcribator/api build` |
 | Shared contract или API client | `pnpm --filter @transcribator/shared check` и `pnpm --filter @transcribator/api-client check` |
 | CRM UI | `pnpm --filter @transcribator/crm check` |
 | UI Kit или Storybook | `pnpm --filter @transcribator/ui typecheck`, `pnpm --filter @transcribator/ui build` и при изменении stories `pnpm --filter @transcribator/ui build-storybook` |

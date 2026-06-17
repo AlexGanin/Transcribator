@@ -14,7 +14,7 @@
 
 Transcribator сейчас является pnpm workspace:
 
-- `apps/api`: Express API на `http://localhost:3001`.
+- `apps/api`: Express API на TypeScript на `http://localhost:3001`.
 - `apps/crm`: Next.js CRM на `http://localhost:3002`.
 - `apps/extension`: WXT React Manifest V3 extension.
 - `packages/shared`: Zod-контракты и общие DTO-типы.

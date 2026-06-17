@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import path from 'node:path';
@@ -13,6 +13,9 @@ import {
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
 import { createJob, getJob, listHistory } from './jobs.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
+import { isHttpError } from './errors.js';
+import type { JobMetadata } from './types.js';
+import type { ProgressEvent, TranscriptionEngine } from '@transcribator/shared';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -35,16 +38,16 @@ const upload = multer({
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
-app.get('/health', (req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-app.post('/transcribe/url', async (req, res, next) => {
+app.post('/transcribe/url', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = urlTranscriptionRequestSchema.parse(req.body || {});
     const job = createJob(
       (onProgress) => transcribeUrl(body.url, { engine: body.engine, onProgress }),
-      { sourceType: 'url', source: body.url, engine: body.engine }
+      buildJobMetadata('url', body.url, body.engine)
     );
     res.status(202).json({ jobId: job.id });
   } catch (error) {
@@ -52,12 +55,12 @@ app.post('/transcribe/url', async (req, res, next) => {
   }
 });
 
-app.post('/transcribe/file', upload.single('file'), async (req, res, next) => {
+app.post('/transcribe/file', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = fileTranscriptionRequestSchema.parse(req.body || {});
     const job = createJob(
       (onProgress) => transcribeFile(req.file, { engine: body.engine, onProgress }),
-      { sourceType: 'file', source: req.file?.originalname, engine: body.engine }
+      buildJobMetadata('file', req.file?.originalname, body.engine)
     );
     res.status(202).json({ jobId: job.id });
   } catch (error) {
@@ -65,7 +68,7 @@ app.post('/transcribe/file', upload.single('file'), async (req, res, next) => {
   }
 });
 
-app.get('/transcribe/history', async (req, res, next) => {
+app.get('/transcribe/history', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     res.json({ history: await listHistory() });
   } catch (error) {
@@ -73,7 +76,7 @@ app.get('/transcribe/history', async (req, res, next) => {
   }
 });
 
-app.post('/videos/formats', async (req, res, next) => {
+app.post('/videos/formats', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = videoFormatsRequestSchema.parse(req.body || {});
     res.json(await getVideoFormats(body.url));
@@ -82,7 +85,7 @@ app.post('/videos/formats', async (req, res, next) => {
   }
 });
 
-app.post('/videos/download', async (req, res, next) => {
+app.post('/videos/download', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = videoDownloadRequestSchema.parse(req.body || {});
     res.status(202).json(await downloadVideo(body.url, body.formatId));
@@ -91,7 +94,7 @@ app.post('/videos/download', async (req, res, next) => {
   }
 });
 
-app.get('/transcribe/jobs/:id/events', (req, res) => {
+app.get('/transcribe/jobs/:id/events', (req: Request<{ id: string }>, res: Response) => {
   const job = getJob(req.params.id);
 
   if (!job) {
@@ -104,7 +107,7 @@ app.get('/transcribe/jobs/:id/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  const send = (event) => {
+  const send = (event: ProgressEvent): void => {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
@@ -117,7 +120,7 @@ app.get('/transcribe/jobs/:id/events', (req, res) => {
     return;
   }
 
-  const onEvent = (event) => {
+  const onEvent = (event: ProgressEvent): void => {
     send(event);
     if (event.type === 'done' || event.type === 'error') {
       job.emitter.off('event', onEvent);
@@ -129,7 +132,7 @@ app.get('/transcribe/jobs/:id/events', (req, res) => {
   req.on('close', () => job.emitter.off('event', onEvent));
 });
 
-app.use((error, req, res, next) => {
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
     res.status(413).json({
       error: `File too large. Max upload size is ${formatBytes(maxUploadSizeBytes)}.`
@@ -137,14 +140,14 @@ app.use((error, req, res, next) => {
     return;
   }
 
-  if (Array.isArray(error?.issues)) {
+  if (isZodValidationError(error)) {
     res.status(400).json({ error: formatValidationError(error) });
     return;
   }
 
   console.error(error);
-  res.status(error.statusCode || 500).json({
-    error: error.message || 'Unexpected server error.'
+  res.status(isHttpError(error) ? error.statusCode : 500).json({
+    error: error instanceof Error ? error.message : 'Unexpected server error.'
   });
 });
 
@@ -153,19 +156,48 @@ app.listen(port, host, () => {
   console.log(`Max upload size is ${formatBytes(maxUploadSizeBytes)}.`);
 });
 
-function parsePositiveNumberEnv(name, fallback) {
+function parsePositiveNumberEnv(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
   const gb = bytes / 1024 ** 3;
   return `${Number(gb.toFixed(2))} GiB`;
 }
 
-function formatValidationError(error) {
+interface ZodIssueLike {
+  path?: PropertyKey[] | undefined;
+  message: string;
+}
+
+interface ZodValidationErrorLike {
+  issues: ZodIssueLike[];
+}
+
+function isZodValidationError(error: unknown): error is ZodValidationErrorLike {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      Array.isArray((error as { issues?: unknown }).issues)
+  );
+}
+
+function formatValidationError(error: ZodValidationErrorLike): string {
   const firstIssue = error.issues?.[0];
   if (!firstIssue) return 'Invalid request.';
   const pathLabel = firstIssue.path?.length ? `${firstIssue.path.join('.')}: ` : '';
   return `${pathLabel}${firstIssue.message}`;
+}
+
+function buildJobMetadata(
+  sourceType: 'url' | 'file',
+  source: string | undefined,
+  engine: TranscriptionEngine | undefined
+): JobMetadata {
+  return {
+    sourceType,
+    ...(source ? { source } : {}),
+    ...(engine ? { engine } : {})
+  };
 }

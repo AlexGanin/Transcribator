@@ -5,7 +5,7 @@
 ## Что умеет проект
 
 - `apps/crm`: CRM на Next.js App Router по адресу `http://localhost:3002`.
-- `apps/api`: Express API по адресу `http://localhost:3001`.
+- `apps/api`: Express API на TypeScript по адресу `http://localhost:3001`.
 - `apps/extension`: каркас Chrome extension на WXT, React и Manifest V3.
 - `packages/shared`: Zod-контракты API, DTO и общие типы.
 - `packages/api-client`: fetch-клиент, который используют CRM и extension.

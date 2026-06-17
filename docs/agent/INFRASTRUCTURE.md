@@ -17,7 +17,7 @@ Storybook для `packages/ui` запускается отдельно на `htt
 | Сервис | По умолчанию | Источник |
 | --- | --- | --- |
 | CRM UI | `127.0.0.1:3002` | `apps/crm/package.json` |
-| API | `127.0.0.1:3001` | `apps/api/src/index.js`, можно переопределить через `apps/api/.env` |
+| API | `127.0.0.1:3001` | `apps/api/src/index.ts`, можно переопределить через `apps/api/.env` |
 | Storybook UI Kit | `127.0.0.1:6006` | `packages/ui/package.json` |
 
 CRM использует `NEXT_PUBLIC_API_BASE_URL`, если переменная задана, иначе `http://localhost:3001`.
@@ -109,7 +109,7 @@ pipx install mlx-whisper
 
 | Путь | Владелец | Содержимое |
 | --- | --- | --- |
-| `source/` | `apps/api/src/pipeline.js` | Safe-name copies загруженных source media |
+| `source/` | `apps/api/src/pipeline.ts` | Safe-name copies загруженных source media |
 | `tmp/` | multer и pipeline | Incoming upload temp files, generated WAV files, Whisper output dirs |
 | `output/` | pipeline и jobs | Итоговые transcript `.txt` files и `history.json` |
 | `downloads/` | video download API | Скачанные YouTube videos |
@@ -153,4 +153,4 @@ CRM отображает stage progress из SSE events и локально сч
 - Если MLX Whisper падает с `No Metal device available`, запускай dev server из обычной macOS terminal session, а не из headless или virtualized session.
 - Если external command не найдена, установи ее или задай абсолютный путь к команде в `apps/api/.env`.
 - Pipeline stderr печатается в API process и включается в API error messages.
-- Express не hot-reload'ится; перезапускай `pnpm dev` после изменений API routes.
+- API dev запускает TypeScript-исходники через `tsx`; после изменений API routes перезапускай `pnpm dev`, если текущий процесс не подхватил изменение.
