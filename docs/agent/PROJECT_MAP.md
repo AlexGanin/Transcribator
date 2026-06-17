@@ -19,6 +19,7 @@ Transcribator
     tmp/          Runtime temporary uploads, WAV files и CLI output folders
     output/       Runtime transcript files и history.json
     downloads/    Runtime downloaded YouTube videos
+    compressed/   Runtime compressed local videos
   docs/agent/     Агентская документация проекта
   package.json    Корневые pnpm workspace commands
   pnpm-lock.yaml  Workspace lockfile
@@ -58,6 +59,7 @@ apps/api
     pipeline.ts
     postProcess.ts
     types.ts
+    videoCompression.ts
     videoDownload.ts
 ```
 
@@ -87,6 +89,11 @@ apps/api
 - `src/videoDownload.ts`
   - Читает доступные video formats через `yt-dlp --dump-json`.
   - Скачивает выбранные formats в `runtime/downloads/`.
+
+- `src/videoCompression.ts`
+  - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
+  - Пишет результат в `runtime/compressed/`.
+  - Использует H.264 + AAC presets и отдает реальный progress по длительности видео.
 
 - `src/errors.ts`
   - Содержит `HttpError` с `statusCode` и guard для error middleware.
@@ -119,6 +126,7 @@ apps/crm
   - transcription history
   - video format selection
   - video downloads
+  - local video compression
 
 ### `apps/extension`
 
@@ -146,7 +154,7 @@ apps/extension
 ### `packages/shared`
 
 - Отвечает за Zod API contracts и `z.infer` types.
-- Содержит request schemas, response schemas, progress event schemas, engine enum, job status enum, video format DTOs и API error DTOs.
+- Содержит request schemas, response schemas, progress event schemas, engine enum, job status enum, video format/compression DTOs и API error DTOs.
 - Не должен импортировать React, Next, Chrome APIs или Node-only APIs.
 
 ### `packages/api-client`
@@ -172,6 +180,7 @@ apps/extension
 - `runtime/tmp/`: multer uploads, generated WAV files и Whisper output folders.
 - `runtime/output/`: итоговые transcript `.txt` files и `history.json`.
 - `runtime/downloads/`: скачанные YouTube videos.
+- `runtime/compressed/`: сжатые локальные video files.
 
 Из этих директорий в git должны попадать только `.gitkeep` files.
 
@@ -229,6 +238,23 @@ CRM video URL
   -> runtime/downloads/<safe_title-formatId>.<ext>
 ```
 
+### Video compression
+
+```txt
+CRM local video file
+  -> packages/api-client
+  -> POST /videos/compress
+  -> shared Zod validation for preset
+  -> multer temp upload
+  -> jobs.createJob with persistHistory: false
+  -> videoCompression.compressVideo
+  -> ffprobe duration metadata
+  -> ffmpeg H.264 + AAC compression
+  -> runtime/compressed/<safe_original_name-preset-compressed-timestamp>.mp4
+  -> SSE progress/done events через /jobs/:id/events
+  -> CRM progress, output path и size savings
+```
+
 ## Generated и локальные файлы
 
 Не коммить эти файлы, если политика проекта явно не изменилась:
@@ -240,5 +266,5 @@ CRM video URL
 - `apps/*/dist/`
 - `packages/*/dist/`
 - `packages/*/storybook-static/`
-- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, кроме `.gitkeep`
+- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/compressed/`, кроме `.gitkeep`
 - Любой `.env` file

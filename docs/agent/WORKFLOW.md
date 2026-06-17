@@ -32,7 +32,7 @@ rg -n "term-to-find" .
 - Держи браузерные API-вызовы в `packages/api-client`; не добавляй туда React, Next, Chrome или Node-specific API.
 - Держи общий UI в `packages/ui`; не добавляй туда Next, Chrome или Node-specific API.
 - Держи ручные исходники и конфиги TypeScript-first: не добавляй `.js`, `.jsx`, `.mjs` или `.cjs` файлы вне generated output и обычных asset-файлов.
-- Не коммить generated files: `.next/`, `.wxt/`, app/package `dist/`, `runtime/source/*`, `runtime/tmp/*`, `runtime/output/*`, `runtime/downloads/*`, кроме `.gitkeep`.
+- Не коммить generated files: `.next/`, `.wxt/`, app/package `dist/`, `runtime/source/*`, `runtime/tmp/*`, `runtime/output/*`, `runtime/downloads/*`, `runtime/compressed/*`, кроме `.gitkeep`.
 - Держи `.env` файлы только локально.
 - Сохраняй текущее runtime-поведение, если пользователь явно не просит изменить его.
 - Предпочитай небольшие файлы с понятной ответственностью при добавлении нового кода.

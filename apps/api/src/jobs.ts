@@ -6,6 +6,7 @@ import { historyEntrySchema, type ProgressEvent } from '@transcribator/shared';
 import type {
   HistoryStageSummary,
   Job,
+  CreateJobOptions,
   JobEventWithoutTimestamp,
   JobHistoryEntry,
   JobMetadata,
@@ -18,9 +19,10 @@ const jobs = new Map<string, Job>();
 const MAX_JOB_AGE_MS = 60 * 60 * 1000;
 const HISTORY_PATH = path.resolve(process.cwd(), '../..', 'runtime', 'output', 'history.json');
 
-export function createJob(task: JobTask, metadata: JobMetadata = {}): Job {
+export function createJob(task: JobTask, metadata: JobMetadata = {}, options: CreateJobOptions = {}): Job {
   const id = randomUUID();
   const startedAt = Date.now();
+  const persistHistory = options.persistHistory !== false;
   const job: Job = {
     id,
     status: 'running',
@@ -39,12 +41,16 @@ export function createJob(task: JobTask, metadata: JobMetadata = {}): Job {
       const result = await task((event) => emitJobEvent(job, { type: 'progress', ...event }));
       job.status = 'done';
       emitJobEvent(job, { type: 'done', result });
-      await saveHistoryEntry(job, 'done', { result });
+      if (persistHistory) {
+        await saveHistoryEntry(job, 'done', { result });
+      }
     } catch (error) {
       job.status = 'error';
       const message = error instanceof Error ? error.message : 'Unexpected server error.';
       emitJobEvent(job, { type: 'error', error: message });
-      await saveHistoryEntry(job, 'error', { error: message });
+      if (persistHistory) {
+        await saveHistoryEntry(job, 'error', { error: message });
+      }
     }
   });
 

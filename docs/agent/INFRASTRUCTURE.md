@@ -116,10 +116,11 @@ pipx install mlx-whisper
 | `runtime/tmp/` | `multer`, `apps/api/src/index.ts`, `apps/api/src/pipeline.ts` | Временные upload-файлы, WAV-файлы после конвертации через `ffmpeg`, а также рабочие папки CLI-движков Whisper. Эти данные нужны только во время обработки и могут очищаться после завершения задач. |
 | `runtime/output/` | `apps/api/src/pipeline.ts`, `apps/api/src/jobs.ts` | Итоговые `.txt`-транскрипты и файл `history.json`. Транскрипты создаются после успешной обработки URL или загруженного файла, а `history.json` хранит последние записи истории для UI. |
 | `runtime/downloads/` | `apps/api/src/videoDownload.ts` | Видео, скачанные через вкладку скачивания YouTube. Имя файла формируется из названия ролика и выбранного format id. |
+| `runtime/compressed/` | `apps/api/src/videoCompression.ts` | Сжатые локальные видео из вкладки CRM «Сжать видео». API пишет сюда MP4-файлы H.264 + AAC с безопасным именем, выбранным пресетом и timestamp. |
 
-Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/` и `runtime/downloads/` коммитятся только `.gitkeep` файлы. Все реальные медиа, временные файлы, транскрипты, `history.json`, скачанные видео и системные файлы вроде `.DS_Store` должны оставаться локальными.
+Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/downloads/` и `runtime/compressed/` коммитятся только `.gitkeep` файлы. Все реальные медиа, временные файлы, транскрипты, `history.json`, скачанные и сжатые видео, а также системные файлы вроде `.DS_Store` должны оставаться локальными.
 
-Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/` и старых файлов в `runtime/downloads/`. `runtime/output/history.json` и итоговые транскрипты лучше удалять осознанно, потому что они используются экраном истории в CRM.
+Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/`, старых файлов в `runtime/downloads/` и старых сжатых роликов в `runtime/compressed/`. `runtime/output/history.json` и итоговые транскрипты лучше удалять осознанно, потому что они используются экраном истории в CRM.
 
 ## API surface
 
@@ -130,8 +131,10 @@ pipx install mlx-whisper
 | `POST` | `/transcribe/file` | Запустить uploaded file transcription job |
 | `GET` | `/transcribe/history` | Вернуть сохраненные history entries |
 | `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream для job progress |
+| `GET` | `/jobs/:id/events` | Нейтральный Server-Sent Events stream для job progress |
 | `POST` | `/videos/formats` | Вернуть доступные video download formats |
 | `POST` | `/videos/download` | Скачать выбранный video format в `runtime/downloads/` |
+| `POST` | `/videos/compress` | Загрузить локальный video file и запустить compression job в `runtime/compressed/` |
 
 Request и response schemas лежат в `packages/shared`.
 

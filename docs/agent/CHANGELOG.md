@@ -4,6 +4,7 @@
 
 ## 2026-06-17
 
+- Добавлено: CRM-вкладка «Сжать видео» с локальной загрузкой одного видео, ffprobe/ffmpeg compression pipeline, реальным SSE progress и сохранением результата в `runtime/compressed/`.
 - Изменено: runtime-папки `source`, `tmp`, `output` и `downloads` перенесены в общий корневой каталог `runtime/`; код API и документация обновлены на новые пути.
 - Изменено: базовый runtime обновлен до Node.js 24.x и pnpm 11.x.
 - Изменено: обновлены Express до 5.x, OpenAI SDK до 6.x, dotenv, concurrently и Node types 24.x; WXT tooling перенесен в devDependencies extension.

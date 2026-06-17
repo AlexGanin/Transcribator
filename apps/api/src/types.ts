@@ -8,6 +8,7 @@ import type {
   StageSummary,
   TranscriptionEngine,
   TranscriptionResult,
+  VideoCompressionPreset,
   VideoFormat
 } from '@transcribator/shared';
 
@@ -15,9 +16,10 @@ export type JobStatus = SharedJobStatus;
 export type TerminalJobStatus = Extract<JobStatus, 'done' | 'error'>;
 
 export interface JobMetadata {
-  sourceType?: 'url' | 'file' | undefined;
+  sourceType?: 'url' | 'file' | 'video-compression' | undefined;
   source?: string | undefined;
   engine?: TranscriptionEngine | undefined;
+  preset?: VideoCompressionPreset | undefined;
 }
 
 export interface Job {
@@ -37,6 +39,10 @@ export type JobEventWithoutTimestamp = ProgressEvent extends infer Event
 export type PipelineProgressEvent = Omit<Extract<ProgressEvent, { type: 'progress' }>, 'type' | 'at'>;
 export type ProgressHandler = (event: PipelineProgressEvent) => void;
 export type JobTask = (onProgress: ProgressHandler) => Promise<TranscriptionResult>;
+
+export interface CreateJobOptions {
+  persistHistory?: boolean | undefined;
+}
 
 export interface TranscriptionOptions {
   engine?: TranscriptionEngine | undefined;

@@ -3,17 +3,19 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import cors from 'cors';
 import multer from 'multer';
 import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import {
   fileTranscriptionRequestSchema,
   urlTranscriptionRequestSchema,
+  videoCompressionRequestSchema,
   videoDownloadRequestSchema,
   videoFormatsRequestSchema
 } from '@transcribator/shared';
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
 import { createJob, getJob, listHistory } from './jobs.js';
+import { compressVideo, ensureCompressedDir } from './videoCompression.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
-import { isHttpError } from './errors.js';
+import { createHttpError, isHttpError } from './errors.js';
 import type { JobMetadata } from './types.js';
 import type { ProgressEvent, TranscriptionEngine } from '@transcribator/shared';
 
@@ -26,6 +28,7 @@ const maxUploadSizeBytes = Math.floor(maxUploadSizeGb * 1024 ** 3);
 
 await ensureRuntimeDirs();
 await ensureDownloadDir();
+await ensureCompressedDir();
 await mkdir(uploadDir, { recursive: true });
 
 const upload = multer({
@@ -94,7 +97,34 @@ app.post('/videos/download', async (req: Request, res: Response, next: NextFunct
   }
 });
 
-app.get('/transcribe/jobs/:id/events', (req: Request<{ id: string }>, res: Response) => {
+app.post('/videos/compress', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = videoCompressionRequestSchema.parse(req.body || {});
+    const uploadedFile = req.file;
+
+    if (!uploadedFile) {
+      throw createHttpError(400, 'Выберите видеофайл для сжатия.');
+    }
+
+    const job = createJob(
+      (onProgress) => compressVideo(uploadedFile, { preset: body.preset, onProgress }),
+      {
+        sourceType: 'video-compression',
+        ...(uploadedFile.originalname ? { source: uploadedFile.originalname } : {}),
+        preset: body.preset
+      },
+      { persistHistory: false }
+    );
+    res.status(202).json({ jobId: job.id });
+  } catch (error) {
+    if (req.file?.path) {
+      await rm(req.file.path, { force: true });
+    }
+    next(error);
+  }
+});
+
+function handleJobEvents(req: Request<{ id: string }>, res: Response): void {
   const job = getJob(req.params.id);
 
   if (!job) {
@@ -130,7 +160,10 @@ app.get('/transcribe/jobs/:id/events', (req: Request<{ id: string }>, res: Respo
 
   job.emitter.on('event', onEvent);
   req.on('close', () => job.emitter.off('event', onEvent));
-});
+}
+
+app.get('/jobs/:id/events', handleJobEvents);
+app.get('/transcribe/jobs/:id/events', handleJobEvents);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {

@@ -15,14 +15,17 @@ runtime/*
 !runtime/tmp/
 !runtime/output/
 !runtime/downloads/
+!runtime/compressed/
 runtime/source/*
 runtime/tmp/*
 runtime/output/*
 runtime/downloads/*
+runtime/compressed/*
 !runtime/source/.gitkeep
 !runtime/tmp/.gitkeep
 !runtime/output/.gitkeep
 !runtime/downloads/.gitkeep
+!runtime/compressed/.gitkeep
 .env
 .DS_Store
 npm-debug.log*

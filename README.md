@@ -63,6 +63,7 @@ Runtime-файлы пишутся в корневую папку `runtime/`:
 - `runtime/tmp/`: uploads, WAV-файлы и папки вывода Whisper
 - `runtime/output/`: транскрипты и `history.json`
 - `runtime/downloads/`: скачанные видео
+- `runtime/compressed/`: сжатые локальные видео
 
 ## Команды
 
@@ -132,8 +133,10 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `POST` | `/transcribe/file` | Запустить транскрибацию загруженного файла |
 | `GET` | `/transcribe/history` | Прочитать сохраненную историю |
 | `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |
+| `GET` | `/jobs/:id/events` | Нейтральный SSE-поток прогресса job |
 | `POST` | `/videos/formats` | Получить доступные форматы видео |
 | `POST` | `/videos/download` | Скачать выбранный формат в `runtime/downloads/` |
+| `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 
 ## Структура проекта
 
@@ -151,6 +154,7 @@ runtime/
   tmp/
   output/
   downloads/
+  compressed/
 docs/agent/
 ```
 

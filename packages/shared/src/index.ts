@@ -37,6 +37,8 @@ export const stageSummarySchema = z.object({
   elapsedSeconds: z.number().default(0)
 });
 
+export const videoCompressionPresetSchema = z.enum(['high', 'balanced', 'small']);
+
 export const transcriptionResultSchema = z.object({
   text: z.string().optional(),
   rawText: z.string().optional(),
@@ -44,7 +46,13 @@ export const transcriptionResultSchema = z.object({
   summary: z.string().optional(),
   outputPath: z.string().optional(),
   source: z.string().optional(),
-  engine: z.string().optional()
+  engine: z.string().optional(),
+  originalSizeBytes: z.number().nonnegative().optional(),
+  compressedSizeBytes: z.number().nonnegative().optional(),
+  savedBytes: z.number().optional(),
+  savingsRatio: z.number().optional(),
+  durationSeconds: z.number().nonnegative().optional(),
+  preset: videoCompressionPresetSchema.optional()
 }).catchall(z.unknown());
 
 export const progressEventSchema = z.discriminatedUnion('type', [
@@ -126,6 +134,20 @@ export const videoDownloadResponseSchema = z.object({
   format: videoFormatSchema
 });
 
+export const videoCompressionRequestSchema = z.object({
+  preset: videoCompressionPresetSchema.default('balanced')
+});
+
+export const videoCompressionResultSchema = z.object({
+  outputPath: z.string(),
+  originalSizeBytes: z.number().nonnegative(),
+  compressedSizeBytes: z.number().nonnegative(),
+  savedBytes: z.number(),
+  savingsRatio: z.number(),
+  durationSeconds: z.number().nonnegative(),
+  preset: videoCompressionPresetSchema
+});
+
 export type TranscriptionEngine = z.infer<typeof transcriptionEngineSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
@@ -143,3 +165,6 @@ export type VideoFormatsRequest = z.infer<typeof videoFormatsRequestSchema>;
 export type VideoFormatsResponse = z.infer<typeof videoFormatsResponseSchema>;
 export type VideoDownloadRequest = z.infer<typeof videoDownloadRequestSchema>;
 export type VideoDownloadResponse = z.infer<typeof videoDownloadResponseSchema>;
+export type VideoCompressionPreset = z.infer<typeof videoCompressionPresetSchema>;
+export type VideoCompressionRequest = z.infer<typeof videoCompressionRequestSchema>;
+export type VideoCompressionResult = z.infer<typeof videoCompressionResultSchema>;

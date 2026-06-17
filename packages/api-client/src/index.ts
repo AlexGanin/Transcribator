@@ -4,6 +4,7 @@ import {
   healthResponseSchema,
   historyResponseSchema,
   jobIdResponseSchema,
+  videoCompressionPresetSchema,
   videoDownloadResponseSchema,
   videoFormatsResponseSchema,
   type ApiError,
@@ -11,6 +12,7 @@ import {
   type HistoryResponse,
   type JobIdResponse,
   type TranscriptionEngine,
+  type VideoCompressionPreset,
   type VideoDownloadResponse,
   type VideoFormatsResponse
 } from '@transcribator/shared';
@@ -99,7 +101,21 @@ export function createApiClient(options: ApiClientOptions = {}) {
         videoDownloadResponseSchema
       ),
 
-    jobEventsUrl: (jobId: string) => `${baseUrl}/transcribe/jobs/${encodeURIComponent(jobId)}/events`
+    compressVideo: (file: File, preset: VideoCompressionPreset = 'balanced') => {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('preset', videoCompressionPresetSchema.parse(preset));
+
+      return requestJson<JobIdResponse>(
+        fetcher,
+        baseUrl,
+        '/videos/compress',
+        { method: 'POST', body },
+        jobIdResponseSchema
+      );
+    },
+
+    jobEventsUrl: (jobId: string) => `${baseUrl}/jobs/${encodeURIComponent(jobId)}/events`
   };
 }
 
