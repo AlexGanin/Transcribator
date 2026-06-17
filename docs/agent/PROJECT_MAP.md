@@ -145,6 +145,7 @@ apps/extension
 
 - Shared React components styled with Tailwind classes and Radix primitives.
 - Includes Button, Input, Textarea, Select, Tabs, Progress, Badge and Card primitives.
+- Each component lives in its own folder under `src/components/<component>/index.tsx` so stories, notes and component-local files can sit next to implementation.
 - Must stay framework-agnostic: no Next APIs, Chrome APIs or Node APIs.
 
 ## Runtime Directories

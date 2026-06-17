@@ -4,6 +4,7 @@ This changelog tracks agent-facing documentation and project-knowledge changes.
 
 ## 2026-06-17
 
+- Changed: moved `packages/ui` component implementations into per-component folders with `index.tsx` entry files for future Storybook and local component artifacts.
 - Fixed: CRM source selector now remounts URL and file inputs separately to avoid React controlled/uncontrolled warnings.
 
 ## 2026-06-16
