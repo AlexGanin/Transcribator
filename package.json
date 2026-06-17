@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "pnpm workspace for the Transcribator Express API, Next.js CRM and Chrome extension.",
-  "packageManager": "pnpm@9.12.0",
+  "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=24.0.0 <25.0.0"
   },
   "scripts": {
     "dev": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && concurrently \"pnpm --filter @transcribator/api dev\" \"pnpm --filter @transcribator/crm dev\"",
@@ -16,6 +16,6 @@
     "build-storybook": "pnpm --filter @transcribator/ui build-storybook"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^10.0.3"
   }
 }

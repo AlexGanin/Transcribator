@@ -4,6 +4,10 @@
 
 ## 2026-06-17
 
+- Изменено: базовый runtime обновлен до Node.js 24.x и pnpm 11.x.
+- Изменено: обновлены Express до 5.x, OpenAI SDK до 6.x, dotenv, concurrently и Node types 24.x; WXT tooling перенесен в devDependencies extension.
+- Добавлено: минимальный pnpm override для `electron-to-chromium@1.5.373`, чтобы пройти active minimum release age policy pnpm 11.
+- Добавлено: точечные pnpm overrides для audit advisory в транзитивных зависимостях `esbuild`, `postcss`, `shell-quote`, `tmp@0.2.7` и `uuid`.
 - Изменено: API `apps/api/src` переведен с ручного JavaScript на TypeScript с NodeNext `tsconfig.json`, `tsx` dev runner и `tsc` build.
 - Изменено: CRM configs `next.config` и `postcss.config` переведены с `.mjs` на TypeScript.
 - Игнорируется: generated output `apps/*/dist/` после TypeScript build приложений.

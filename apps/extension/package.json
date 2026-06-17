@@ -12,14 +12,14 @@
   "dependencies": {
     "@transcribator/api-client": "workspace:*",
     "@transcribator/shared": "workspace:*",
-    "@wxt-dev/module-react": "^1.1.3",
-    "wxt": "^0.20.26",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@wxt-dev/module-react": "^1.2.2",
+    "wxt": "^0.20.26",
     "typescript": "^6.0.3"
   }
 }
