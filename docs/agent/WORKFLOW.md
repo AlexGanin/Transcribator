@@ -47,6 +47,7 @@ rg -n "term-to-find" .
 | Поведение API на JS | `pnpm --filter @transcribator/api check` |
 | Shared contract или API client | `pnpm --filter @transcribator/shared check` и `pnpm --filter @transcribator/api-client check` |
 | CRM UI | `pnpm --filter @transcribator/crm check` |
+| UI Kit или Storybook | `pnpm --filter @transcribator/ui typecheck`, `pnpm --filter @transcribator/ui build` и при изменении stories `pnpm --filter @transcribator/ui build-storybook` |
 | Extension | `pnpm --filter @transcribator/extension check` |
 | Root script или cross-workspace изменение | `pnpm check` |
 | Только документация | `git diff --check` плюс чтение измененных docs |

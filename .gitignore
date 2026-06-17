@@ -6,6 +6,7 @@ apps/crm/out/
 apps/extension/.wxt/
 apps/extension/.output/
 packages/*/dist/
+packages/*/storybook-static/
 *.tsbuildinfo
 .next/
 downloads/*

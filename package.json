@@ -11,7 +11,9 @@
     "dev": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && concurrently \"pnpm --filter @transcribator/api dev\" \"pnpm --filter @transcribator/crm dev\"",
     "build": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && pnpm --filter @transcribator/api build && pnpm --filter @transcribator/crm build && pnpm --filter @transcribator/extension build",
     "typecheck": "pnpm --filter @transcribator/shared typecheck && pnpm --filter @transcribator/api-client typecheck && pnpm --filter @transcribator/ui typecheck && pnpm --filter @transcribator/api typecheck && pnpm --filter @transcribator/crm typecheck && pnpm --filter @transcribator/extension typecheck",
-    "check": "pnpm --filter @transcribator/shared check && pnpm --filter @transcribator/api-client check && pnpm --filter @transcribator/ui check && pnpm --filter @transcribator/api check && pnpm --filter @transcribator/crm check && pnpm --filter @transcribator/extension check"
+    "check": "pnpm --filter @transcribator/shared check && pnpm --filter @transcribator/api-client check && pnpm --filter @transcribator/ui check && pnpm --filter @transcribator/api check && pnpm --filter @transcribator/crm check && pnpm --filter @transcribator/extension check",
+    "storybook": "pnpm --filter @transcribator/ui storybook",
+    "build-storybook": "pnpm --filter @transcribator/ui build-storybook"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

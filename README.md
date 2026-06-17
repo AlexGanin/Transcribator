@@ -9,7 +9,7 @@
 - `apps/extension`: каркас Chrome extension на WXT, React и Manifest V3.
 - `packages/shared`: Zod-контракты API, DTO и общие типы.
 - `packages/api-client`: fetch-клиент, который используют CRM и extension.
-- `packages/ui`: shadcn-style React UI primitives на Tailwind и Radix.
+- `packages/ui`: shadcn-style React UI primitives на Tailwind и Radix, плюс Storybook UI Kit.
 
 Express API отвечает за всю транскрибацию и видео-логику: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, Server-Sent Events, историю и скачивания.
 
@@ -66,7 +66,7 @@ Runtime-файлы пишутся в корневые папки:
 
 ## Команды
 
-В проекте используются только эти категории команд:
+Основные команды:
 
 ```sh
 pnpm dev
@@ -75,12 +75,22 @@ pnpm typecheck
 pnpm check
 ```
 
+UI Kit на Storybook:
+
+```sh
+pnpm storybook
+pnpm build-storybook
+```
+
+Storybook открывается на `http://localhost:6006`.
+
 Отдельный workspace-пакет можно запустить через `--filter`, например:
 
 ```sh
 pnpm --filter @transcribator/api dev
 pnpm --filter @transcribator/crm dev
 pnpm --filter @transcribator/extension dev
+pnpm --filter @transcribator/ui storybook
 ```
 
 ## Движки транскрибации
@@ -135,7 +145,7 @@ apps/
 packages/
   api-client/   fetch-клиент для API-вызовов
   shared/       Zod-схемы и общие типы
-  ui/           общие shadcn-style UI-компоненты
+  ui/           общие shadcn-style UI-компоненты и Storybook
 source/
 tmp/
 output/

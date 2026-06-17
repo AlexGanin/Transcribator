@@ -13,7 +13,7 @@ Transcribator
   packages/
     api-client/   fetch-based API client
     shared/       Zod schemas, DTOs и общие types
-    ui/           общие shadcn-style React components
+    ui/           общие shadcn-style React components и Storybook UI Kit
   source/         Runtime-копии загруженных source files
   tmp/            Runtime temporary uploads, WAV files и CLI output folders
   output/         Runtime transcript files и history.json
@@ -26,7 +26,7 @@ Transcribator
 ## Корневые файлы
 
 - `package.json`
-  - Отвечает за корневые команды `dev`, `build`, `typecheck` и `check`.
+  - Отвечает за корневые команды `dev`, `build`, `typecheck`, `check`, `storybook` и `build-storybook`.
   - Запускает Express API и Next CRM вместе для локальной разработки.
 
 - `pnpm-workspace.yaml`
@@ -146,6 +146,8 @@ apps/extension
 - Общие React components, стилизованные Tailwind classes и Radix primitives.
 - Содержит Button, Input, Textarea, Select, Tabs, Progress, Badge и Card primitives.
 - Каждый компонент лежит в отдельной папке `src/components/<component>/index.tsx`, чтобы рядом можно было хранить stories, notes и component-local files.
+- Storybook живет внутри пакета: `.storybook/`, `src/storybook.css`, component stories рядом с `index.tsx` и `src/stories/patterns.stories.tsx`.
+- Root command `pnpm storybook` запускает `@transcribator/ui` Storybook на `http://localhost:6006`.
 - Должен оставаться framework-agnostic: без Next APIs, Chrome APIs или Node APIs.
 
 ## Runtime-директории
@@ -220,5 +222,6 @@ CRM video URL
 - `apps/extension/.wxt/`
 - `apps/extension/.output/`
 - `packages/*/dist/`
+- `packages/*/storybook-static/`
 - Runtime contents в `downloads/`, `source/`, `tmp/`, `output/`
 - Любой `.env` file

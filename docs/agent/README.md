@@ -19,7 +19,7 @@ Transcribator сейчас является pnpm workspace:
 - `apps/extension`: WXT React Manifest V3 extension.
 - `packages/shared`: Zod-контракты и общие DTO-типы.
 - `packages/api-client`: fetch-клиент для браузерных поверхностей.
-- `packages/ui`: общие shadcn-style React UI-компоненты.
+- `packages/ui`: общие shadcn-style React UI-компоненты и Storybook UI Kit.
 
 Express API остается владельцем всей media-логики: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, SSE progress, история и скачивание видео. Runtime-файлы остаются в корневых `source/`, `tmp/`, `output/` и `downloads/`.
 
