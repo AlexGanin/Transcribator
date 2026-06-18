@@ -3,6 +3,8 @@
 import * as React from 'react';
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileAudio,
   FileVideo,
@@ -50,6 +52,11 @@ import {
   Textarea,
   cn
 } from '@transcribator/ui';
+import {
+  chooseNextLightboxIndex,
+  getAdjacentLightboxIndex,
+  type LightboxDirection
+} from './history-lightbox-navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -124,7 +131,7 @@ interface HistoryEditForm {
 
 interface LightboxState {
   scope: ScreenshotScope;
-  screenshot: HistoryScreenshot;
+  index: number;
 }
 
 export function TranscribatorApp() {
@@ -175,6 +182,7 @@ export function TranscribatorApp() {
   const compressionStartedAtRef = React.useRef<number>(Date.now());
   const eventSourceRef = React.useRef<EventSource | null>(null);
   const compressionEventSourceRef = React.useRef<EventSource | null>(null);
+  const lightboxDeleteInFlightRef = React.useRef(false);
 
   React.useEffect(() => {
     void loadHistory();
@@ -228,6 +236,35 @@ export function TranscribatorApp() {
 
     return () => window.clearInterval(timer);
   }, [compressionStatus]);
+
+  React.useEffect(() => {
+    if (!lightbox) return undefined;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setLightbox(null);
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        navigateLightbox('previous');
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        navigateLightbox('next');
+      }
+
+      if (event.key === 'Delete' && lightbox.scope === 'active') {
+        event.preventDefault();
+        void trashLightboxScreenshot();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [historyDetail, historyAction, lightbox]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -511,6 +548,51 @@ export function TranscribatorApp() {
     setSelectedTrashedScreenshots((current) => toggleSelection(current, fileName, checked));
   }
 
+  function openLightbox(scope: ScreenshotScope, screenshot: HistoryScreenshot) {
+    if (!historyDetail) return;
+
+    const screenshots = screenshotsForScope(historyDetail, scope);
+    const index = screenshots.findIndex((item) => item.fileName === screenshot.fileName);
+    if (index < 0) return;
+
+    setLightbox({ scope, index });
+  }
+
+  function navigateLightbox(direction: LightboxDirection) {
+    setLightbox((current) => {
+      if (!current || !historyDetail) return current;
+
+      const screenshots = screenshotsForScope(historyDetail, current.scope);
+      const nextIndex = getAdjacentLightboxIndex(current.index, screenshots.length, direction);
+      return nextIndex === null ? null : { ...current, index: nextIndex };
+    });
+  }
+
+  async function trashLightboxScreenshot() {
+    if (!historyDetail || !lightbox || lightbox.scope !== 'active' || lightboxDeleteInFlightRef.current) return;
+
+    const screenshot = getLightboxScreenshot(historyDetail, lightbox);
+    if (!screenshot) return;
+
+    const nextIndex = chooseNextLightboxIndex(lightbox.index, historyDetail.screenshots.length);
+    lightboxDeleteInFlightRef.current = true;
+    setHistoryAction('trash');
+    setHistoryError('');
+
+    try {
+      const nextDetail = await api.trashHistoryScreenshots(historyDetail.entry.id, [screenshot.fileName]);
+      applyHistoryDetail(nextDetail);
+      const nextScreenshots = screenshotsForScope(nextDetail, 'active');
+      setLightbox(nextIndex === null || !nextScreenshots[nextIndex] ? null : { scope: 'active', index: nextIndex });
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось перенести скриншот в корзину.'));
+    } finally {
+      lightboxDeleteInFlightRef.current = false;
+      setHistoryAction('');
+    }
+  }
+
   function handleSourceModeChange(nextMode: SourceMode) {
     setSourceMode(nextMode);
     setUrl('');
@@ -687,6 +769,8 @@ export function TranscribatorApp() {
       : activeTab === 'history'
         ? 'idle'
         : status;
+  const lightboxScreenshot = historyDetail && lightbox ? getLightboxScreenshot(historyDetail, lightbox) : null;
+  const lightboxTotalItems = historyDetail && lightbox ? screenshotsForScope(historyDetail, lightbox.scope).length : 0;
 
   return (
     <main className="min-h-screen px-4 py-8 text-neutral-950 sm:px-6 lg:px-8">
@@ -865,7 +949,7 @@ export function TranscribatorApp() {
                   onTrashSelected={() => void trashSelectedScreenshots()}
                   onRestoreSelected={() => void restoreSelectedScreenshots()}
                   onClearTrash={() => void clearScreenshotsTrash()}
-                  onOpenLightbox={(scope, screenshot) => setLightbox({ scope, screenshot })}
+                  onOpenLightbox={openLightbox}
                 />
               ) : (
                 <HistoryList
@@ -1001,8 +1085,17 @@ export function TranscribatorApp() {
           </TabsContent>
         </Tabs>
 
-        {lightbox && (
-          <ScreenshotLightbox lightbox={lightbox} onClose={() => setLightbox(null)} />
+        {lightbox && lightboxScreenshot && (
+          <ScreenshotLightbox
+            lightbox={lightbox}
+            screenshot={lightboxScreenshot}
+            totalItems={lightboxTotalItems}
+            deleting={historyAction === 'trash'}
+            onClose={() => setLightbox(null)}
+            onPrevious={() => navigateLightbox('previous')}
+            onNext={() => navigateLightbox('next')}
+            onDelete={lightbox.scope === 'active' ? () => void trashLightboxScreenshot() : undefined}
+          />
         )}
       </div>
     </main>
@@ -1389,13 +1482,44 @@ function ScreenshotGrid({
   );
 }
 
-function ScreenshotLightbox({ lightbox, onClose }: { lightbox: LightboxState; onClose: () => void }) {
-  const imageUrl = apiAssetUrl(lightbox.screenshot.url);
+function ScreenshotLightbox({
+  lightbox,
+  screenshot,
+  totalItems,
+  deleting,
+  onClose,
+  onPrevious,
+  onNext,
+  onDelete
+}: {
+  lightbox: LightboxState;
+  screenshot: HistoryScreenshot;
+  totalItems: number;
+  deleting: boolean;
+  onClose: () => void;
+  onPrevious: () => void;
+  onNext: () => void;
+  onDelete?: (() => void) | undefined;
+}) {
+  const imageUrl = apiAssetUrl(screenshot.url);
 
   if (!imageUrl) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true">
+      <div className="absolute left-4 top-4 flex gap-2">
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white text-neutral-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Перенести в корзину"
+          >
+            <Trash2 className="h-5 w-5" />
+          </button>
+        )}
+      </div>
       <button
         type="button"
         onClick={onClose}
@@ -1404,10 +1528,26 @@ function ScreenshotLightbox({ lightbox, onClose }: { lightbox: LightboxState; on
       >
         <X className="h-5 w-5" />
       </button>
+      <button
+        type="button"
+        onClick={onPrevious}
+        className="absolute left-4 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white text-neutral-950 shadow-sm"
+        aria-label="Предыдущий скриншот"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+      <button
+        type="button"
+        onClick={onNext}
+        className="absolute right-4 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white text-neutral-950 shadow-sm"
+        aria-label="Следующий скриншот"
+      >
+        <ChevronRight className="h-6 w-6" />
+      </button>
       <figure className="grid max-h-full max-w-6xl gap-3">
-        <img src={imageUrl} alt={lightbox.screenshot.fileName} className="max-h-[82vh] max-w-full rounded-md object-contain" />
+        <img src={imageUrl} alt={screenshot.fileName} className="max-h-[82vh] max-w-full rounded-md object-contain" />
         <figcaption className="text-center text-sm text-white">
-          {lightbox.screenshot.fileName} · {lightbox.scope === 'trash' ? 'корзина' : 'галерея'}
+          {screenshot.fileName} · {lightbox.scope === 'trash' ? 'корзина' : 'галерея'} · {lightbox.index + 1}/{totalItems}
         </figcaption>
       </figure>
     </div>
@@ -1421,6 +1561,14 @@ function ReadonlyField({ label, value }: { label: string; value: string | number
       <span className="break-words text-sm text-neutral-900">{String(value || 'Нет данных')}</span>
     </div>
   );
+}
+
+function screenshotsForScope(detail: HistoryDetailResponse, scope: ScreenshotScope): HistoryScreenshot[] {
+  return scope === 'active' ? detail.screenshots : detail.trashedScreenshots;
+}
+
+function getLightboxScreenshot(detail: HistoryDetailResponse, lightbox: LightboxState): HistoryScreenshot | null {
+  return screenshotsForScope(detail, lightbox.scope)[lightbox.index] || null;
 }
 
 function createStages(stageTemplate: Array<{ id: string; label: string }>): StageState[] {
