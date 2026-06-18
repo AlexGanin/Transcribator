@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Save,
   Trash2,
+  Undo2,
   X
 } from 'lucide-react';
 import { ApiClientError, createApiClient } from '@transcribator/api-client';
@@ -57,8 +58,10 @@ import {
 } from './crm-navigation';
 import {
   chooseNextLightboxIndex,
+  getRestoredLightboxIndex,
   getAdjacentLightboxIndex,
   isLightboxDeleteKey,
+  isLightboxUndoKey,
   type LightboxDirection
 } from './history-lightbox-navigation';
 
@@ -137,6 +140,11 @@ interface LightboxState {
   index: number;
 }
 
+interface LastLightboxTrash {
+  entryId: string;
+  fileName: string;
+}
+
 interface TranscribatorAppProps {
   view?: AppView;
   historyEntryId?: string;
@@ -171,6 +179,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const [selectedActiveScreenshots, setSelectedActiveScreenshots] = React.useState<string[]>([]);
   const [selectedTrashedScreenshots, setSelectedTrashedScreenshots] = React.useState<string[]>([]);
   const [lightbox, setLightbox] = React.useState<LightboxState | null>(null);
+  const [lastLightboxTrash, setLastLightboxTrash] = React.useState<LastLightboxTrash | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const [videoUrl, setVideoUrl] = React.useState('');
   const [videoTitle, setVideoTitle] = React.useState('');
@@ -268,16 +277,22 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
         event.preventDefault();
         void trashLightboxScreenshot();
       }
+
+      if (isLightboxUndoKey(event.key, event.metaKey, event.code)) {
+        event.preventDefault();
+        void restoreLastLightboxScreenshot();
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [historyDetail, historyAction, lightbox]);
+  }, [historyDetail, historyAction, lastLightboxTrash, lightbox]);
 
   React.useEffect(() => {
     if (view !== 'history') {
       setHistoryError('');
       setLightbox(null);
+      setLastLightboxTrash(null);
       return;
     }
 
@@ -291,6 +306,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
     setSelectedActiveScreenshots([]);
     setSelectedTrashedScreenshots([]);
     setLightbox(null);
+    setLastLightboxTrash(null);
   }, [view, historyEntryId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -487,6 +503,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
     setSelectedActiveScreenshots([]);
     setSelectedTrashedScreenshots([]);
     setLightbox(null);
+    setLastLightboxTrash(null);
     router.push('/history');
   }
 
@@ -538,6 +555,9 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
 
     try {
       applyHistoryDetail(await api.restoreHistoryScreenshots(historyDetail.entry.id, selectedTrashedScreenshots));
+      if (lastLightboxTrash && selectedTrashedScreenshots.includes(lastLightboxTrash.fileName)) {
+        setLastLightboxTrash(null);
+      }
       await loadHistory();
     } catch (caught) {
       setHistoryError(errorMessage(caught, 'Не удалось восстановить скриншоты.'));
@@ -556,6 +576,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
 
     try {
       applyHistoryDetail(await api.clearHistoryScreenshotsTrash(historyDetail.entry.id));
+      setLastLightboxTrash(null);
       await loadHistory();
     } catch (caught) {
       setHistoryError(errorMessage(caught, 'Не удалось очистить корзину.'));
@@ -609,6 +630,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
 
     try {
       const nextDetail = await api.trashHistoryScreenshots(historyDetail.entry.id, [screenshot.fileName]);
+      setLastLightboxTrash({ entryId: historyDetail.entry.id, fileName: screenshot.fileName });
       applyHistoryDetail(nextDetail);
       const nextScreenshots = screenshotsForScope(nextDetail, 'active');
       setLightbox(nextIndex === null || !nextScreenshots[nextIndex] ? null : { scope: 'active', index: nextIndex });
@@ -617,6 +639,33 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
       setHistoryError(errorMessage(caught, 'Не удалось перенести скриншот в корзину.'));
     } finally {
       lightboxDeleteInFlightRef.current = false;
+      setHistoryAction('');
+    }
+  }
+
+  async function restoreLastLightboxScreenshot() {
+    if (
+      !historyDetail ||
+      !lastLightboxTrash ||
+      lastLightboxTrash.entryId !== historyDetail.entry.id ||
+      historyAction === 'restore'
+    ) {
+      return;
+    }
+
+    setHistoryAction('restore');
+    setHistoryError('');
+
+    try {
+      const nextDetail = await api.restoreHistoryScreenshots(historyDetail.entry.id, [lastLightboxTrash.fileName]);
+      applyHistoryDetail(nextDetail);
+      const restoredIndex = getRestoredLightboxIndex(nextDetail.screenshots, lastLightboxTrash.fileName);
+      setLastLightboxTrash(null);
+      setLightbox(restoredIndex === null ? null : { scope: 'active', index: restoredIndex });
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось вернуть последний скриншот.'));
+    } finally {
       setHistoryAction('');
     }
   }
@@ -799,6 +848,11 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
         : status;
   const lightboxScreenshot = historyDetail && lightbox ? getLightboxScreenshot(historyDetail, lightbox) : null;
   const lightboxTotalItems = historyDetail && lightbox ? screenshotsForScope(historyDetail, lightbox.scope).length : 0;
+  const canUndoLightboxTrash = Boolean(
+    historyDetail &&
+    lastLightboxTrash &&
+    lastLightboxTrash.entryId === historyDetail.entry.id
+  );
 
   return (
     <main className="min-h-screen px-4 py-8 text-neutral-950 sm:px-6 lg:px-8">
@@ -1128,10 +1182,12 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
             screenshot={lightboxScreenshot}
             totalItems={lightboxTotalItems}
             deleting={historyAction === 'trash'}
+            restoring={historyAction === 'restore'}
             onClose={() => setLightbox(null)}
             onPrevious={() => navigateLightbox('previous')}
             onNext={() => navigateLightbox('next')}
             onDelete={lightbox.scope === 'active' ? () => void trashLightboxScreenshot() : undefined}
+            onUndo={lightbox.scope === 'active' && canUndoLightboxTrash ? () => void restoreLastLightboxScreenshot() : undefined}
           />
         )}
       </div>
@@ -1524,19 +1580,23 @@ function ScreenshotLightbox({
   screenshot,
   totalItems,
   deleting,
+  restoring,
   onClose,
   onPrevious,
   onNext,
-  onDelete
+  onDelete,
+  onUndo
 }: {
   lightbox: LightboxState;
   screenshot: HistoryScreenshot;
   totalItems: number;
   deleting: boolean;
+  restoring: boolean;
   onClose: () => void;
   onPrevious: () => void;
   onNext: () => void;
   onDelete?: (() => void) | undefined;
+  onUndo?: (() => void) | undefined;
 }) {
   const imageUrl = apiAssetUrl(screenshot.url);
 
@@ -1554,6 +1614,18 @@ function ScreenshotLightbox({
             aria-label="Перенести в корзину"
           >
             <Trash2 className="h-5 w-5" />
+          </button>
+        )}
+        {onUndo && (
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={restoring}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white text-neutral-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Вернуть последний скриншот"
+            title="Вернуть последний скриншот (Cmd+Z)"
+          >
+            <Undo2 className="h-5 w-5" />
           </button>
         )}
       </div>

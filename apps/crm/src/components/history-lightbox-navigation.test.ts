@@ -3,7 +3,9 @@ import { describe, it } from 'node:test';
 import {
   chooseNextLightboxIndex,
   getAdjacentLightboxIndex,
-  isLightboxDeleteKey
+  getRestoredLightboxIndex,
+  isLightboxDeleteKey,
+  isLightboxUndoKey
 } from './history-lightbox-navigation.js';
 
 describe('history lightbox navigation', () => {
@@ -29,5 +31,24 @@ describe('history lightbox navigation', () => {
     assert.equal(isLightboxDeleteKey('Backspace'), true);
     assert.equal(isLightboxDeleteKey('Delete'), true);
     assert.equal(isLightboxDeleteKey('ArrowLeft'), false);
+  });
+
+  it('treats command z as a lightbox undo shortcut', () => {
+    assert.equal(isLightboxUndoKey('z', true), true);
+    assert.equal(isLightboxUndoKey('Z', true), true);
+    assert.equal(isLightboxUndoKey('x', true, 'KeyZ'), true);
+    assert.equal(isLightboxUndoKey('z', false), false);
+    assert.equal(isLightboxUndoKey('Backspace', true), false);
+  });
+
+  it('finds a restored screenshot index in the active gallery', () => {
+    const screenshots = [
+      { fileName: 'first.jpg' },
+      { fileName: 'restored.jpg' },
+      { fileName: 'last.jpg' }
+    ];
+
+    assert.equal(getRestoredLightboxIndex(screenshots, 'restored.jpg'), 1);
+    assert.equal(getRestoredLightboxIndex(screenshots, 'missing.jpg'), null);
   });
 });

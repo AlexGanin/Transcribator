@@ -27,6 +27,15 @@ export function isLightboxDeleteKey(key: string): boolean {
   return key === 'Delete' || key === 'Backspace';
 }
 
+export function isLightboxUndoKey(key: string, metaKey: boolean, code = ''): boolean {
+  return metaKey && (key.toLowerCase() === 'z' || code === 'KeyZ');
+}
+
+export function getRestoredLightboxIndex(screenshots: Array<{ fileName: string }>, fileName: string): number | null {
+  const index = screenshots.findIndex((screenshot) => screenshot.fileName === fileName);
+  return index < 0 ? null : index;
+}
+
 function normalizeIndex(index: number, totalItems: number): number {
   if (!Number.isFinite(index) || totalItems <= 0) return 0;
   return Math.max(0, Math.min(totalItems - 1, Math.floor(index)));
