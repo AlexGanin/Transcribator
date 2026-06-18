@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import {
   ArrowLeft,
@@ -45,16 +47,18 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   Textarea,
   cn
 } from '@transcribator/ui';
 import {
+  buildHistoryDetailPath,
+  crmNavigationItems,
+  type AppView
+} from './crm-navigation';
+import {
   chooseNextLightboxIndex,
   getAdjacentLightboxIndex,
+  isLightboxDeleteKey,
   type LightboxDirection
 } from './history-lightbox-navigation';
 
@@ -102,7 +106,6 @@ const STAGE_LABELS: Record<string, string> = {
   compress: 'Сжатие'
 };
 
-type AppTab = 'transcribe' | 'history' | 'download' | 'compress';
 type SourceMode = 'url' | 'file';
 type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
@@ -134,9 +137,14 @@ interface LightboxState {
   index: number;
 }
 
-export function TranscribatorApp() {
+interface TranscribatorAppProps {
+  view?: AppView;
+  historyEntryId?: string;
+}
+
+export function TranscribatorApp({ view = 'transcribe', historyEntryId }: TranscribatorAppProps) {
+  const router = useRouter();
   const api = React.useMemo(() => createApiClient({ baseUrl: API_BASE_URL }), []);
-  const [activeTab, setActiveTab] = React.useState<AppTab>('transcribe');
   const [sourceMode, setSourceMode] = React.useState<SourceMode>('url');
   const [url, setUrl] = React.useState('');
   const [file, setFile] = React.useState<File | null>(null);
@@ -256,7 +264,7 @@ export function TranscribatorApp() {
         navigateLightbox('next');
       }
 
-      if (event.key === 'Delete' && lightbox.scope === 'active') {
+      if (isLightboxDeleteKey(event.key) && lightbox.scope === 'active') {
         event.preventDefault();
         void trashLightboxScreenshot();
       }
@@ -265,6 +273,25 @@ export function TranscribatorApp() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [historyDetail, historyAction, lightbox]);
+
+  React.useEffect(() => {
+    if (view !== 'history') {
+      setHistoryError('');
+      setLightbox(null);
+      return;
+    }
+
+    if (historyEntryId) {
+      void openHistoryDetail(historyEntryId);
+      return;
+    }
+
+    setHistoryDetail(null);
+    setHistoryError('');
+    setSelectedActiveScreenshots([]);
+    setSelectedTrashedScreenshots([]);
+    setLightbox(null);
+  }, [view, historyEntryId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -460,6 +487,7 @@ export function TranscribatorApp() {
     setSelectedActiveScreenshots([]);
     setSelectedTrashedScreenshots([]);
     setLightbox(null);
+    router.push('/history');
   }
 
   async function saveHistoryDetail() {
@@ -762,11 +790,11 @@ export function TranscribatorApp() {
   const canDownloadVideo = Boolean(videoUrl.trim() && selectedVideoFormatId) && !videoBusy;
   const compressionBusy = compressionStatus === 'running';
   const canCompressVideo = Boolean(compressionFile) && !compressionBusy;
-  const headerStatus = activeTab === 'compress'
+  const headerStatus = view === 'compress'
     ? compressionStatus
-    : activeTab === 'download'
+    : view === 'download'
       ? normalizeVideoStatus(videoStatus)
-      : activeTab === 'history'
+      : view === 'history'
         ? 'idle'
         : status;
   const lightboxScreenshot = historyDetail && lightbox ? getLightboxScreenshot(historyDetail, lightbox) : null;
@@ -785,15 +813,25 @@ export function TranscribatorApp() {
           </Badge>
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AppTab)} className="w-full">
-          <TabsList aria-label="App sections">
-            <TabsTrigger value="transcribe">Транскрибатор</TabsTrigger>
-            <TabsTrigger value="history">История</TabsTrigger>
-            <TabsTrigger value="download">Скачать видео</TabsTrigger>
-            <TabsTrigger value="compress">Сжать видео</TabsTrigger>
-          </TabsList>
+        <nav className="flex flex-wrap gap-2" aria-label="Разделы CRM">
+          {crmNavigationItems.map((item) => (
+            <Link
+              href={item.href}
+              key={item.id}
+              aria-current={item.id === view ? 'page' : undefined}
+              className={cn(
+                'inline-flex min-h-10 items-center rounded-md border px-4 py-2 text-sm font-medium transition',
+                item.id === view
+                  ? 'border-neutral-950 bg-neutral-950 text-white'
+                  : 'border-neutral-200 bg-white text-neutral-800 hover:border-neutral-300 hover:bg-neutral-50'
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
 
-          <TabsContent value="transcribe">
+        {view === 'transcribe' && (
             <section className="grid gap-6">
               <form onSubmit={handleSubmit} className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap gap-2">
@@ -929,9 +967,9 @@ export function TranscribatorApp() {
               </section>
 
             </section>
-          </TabsContent>
+        )}
 
-          <TabsContent value="history">
+        {view === 'history' && (
             <section className="grid gap-5">
               {historyDetail ? (
                 <HistoryDetailView
@@ -956,7 +994,7 @@ export function TranscribatorApp() {
                   history={history}
                   loading={historyLoading}
                   onRefresh={() => void loadHistory({ showLoading: true, showError: true })}
-                  onOpen={(id) => void openHistoryDetail(id)}
+                  onOpen={(id) => router.push(buildHistoryDetailPath(id))}
                 />
               )}
 
@@ -966,9 +1004,9 @@ export function TranscribatorApp() {
                 </p>
               )}
             </section>
-          </TabsContent>
+        )}
 
-          <TabsContent value="download">
+        {view === 'download' && (
             <section className="grid gap-5">
               <form onSubmit={handleLoadVideoFormats} className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
                 <label className="grid gap-2 text-sm font-medium">
@@ -1022,9 +1060,9 @@ export function TranscribatorApp() {
                 </p>
               )}
             </section>
-          </TabsContent>
+        )}
 
-          <TabsContent value="compress">
+        {view === 'compress' && (
             <section className="grid gap-5">
               <form onSubmit={handleCompressVideo} className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
                 <label className="grid gap-2 text-sm font-medium">
@@ -1082,8 +1120,7 @@ export function TranscribatorApp() {
                 </section>
               )}
             </section>
-          </TabsContent>
-        </Tabs>
+        )}
 
         {lightbox && lightboxScreenshot && (
           <ScreenshotLightbox

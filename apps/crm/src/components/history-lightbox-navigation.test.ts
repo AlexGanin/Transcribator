@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   chooseNextLightboxIndex,
-  getAdjacentLightboxIndex
+  getAdjacentLightboxIndex,
+  isLightboxDeleteKey
 } from './history-lightbox-navigation.js';
 
 describe('history lightbox navigation', () => {
@@ -22,5 +23,11 @@ describe('history lightbox navigation', () => {
     assert.equal(chooseNextLightboxIndex(1, 4), 1);
     assert.equal(chooseNextLightboxIndex(3, 4), 2);
     assert.equal(chooseNextLightboxIndex(0, 1), null);
+  });
+
+  it('treats Mac Delete and forward Delete keys as lightbox delete shortcuts', () => {
+    assert.equal(isLightboxDeleteKey('Backspace'), true);
+    assert.equal(isLightboxDeleteKey('Delete'), true);
+    assert.equal(isLightboxDeleteKey('ArrowLeft'), false);
   });
 });

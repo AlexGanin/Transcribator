@@ -23,6 +23,10 @@ export function chooseNextLightboxIndex(currentIndex: number, totalItemsBeforeDe
     : normalizedIndex;
 }
 
+export function isLightboxDeleteKey(key: string): boolean {
+  return key === 'Delete' || key === 'Backspace';
+}
+
 function normalizeIndex(index: number, totalItems: number): number {
   if (!Number.isFinite(index) || totalItems <= 0) return 0;
   return Math.max(0, Math.min(totalItems - 1, Math.floor(index)));
