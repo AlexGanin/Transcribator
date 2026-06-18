@@ -7,6 +7,13 @@ import { once } from 'node:events';
 import OpenAI from 'openai';
 import { postProcessTranscript, summarizeTranscript } from './postProcess.js';
 import { createHttpError } from './errors.js';
+import {
+  createObsidianVault,
+  ensureObsidianDir,
+  hashFileMd5,
+  hashStringMd5,
+  normalizeScreenshotIntervalSeconds
+} from './obsidianNotes.js';
 import type {
   ChildProcessMeta,
   LoggedChildProcess,
@@ -32,7 +39,8 @@ export async function ensureRuntimeDirs(): Promise<void> {
   await Promise.all([
     mkdir(SOURCE_DIR, { recursive: true }),
     mkdir(OUTPUT_DIR, { recursive: true }),
-    mkdir(TMP_DIR, { recursive: true })
+    mkdir(TMP_DIR, { recursive: true }),
+    ensureObsidianDir()
   ]);
 }
 
@@ -82,13 +90,25 @@ async function transcribeFromUrlStream(inputUrl: string, options: TranscriptionO
   if (engine === ENGINE_LOCAL_STDIN) {
     await assertCommandAvailable(getWhisperCommand());
     const rawText = await runUrlToWhisperStdin(inputUrl, timestamp, options);
-    return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine }, options);
+    return finalizeTranscript(rawText, outputPath, {
+      source: inputUrl,
+      sourceType: 'url',
+      engine,
+      videoHash: hashStringMd5(inputUrl),
+      sourceUrl: inputUrl
+    }, options);
   }
 
   await runUrlToWav(inputUrl, wavPath, options);
   const rawText = await transcribeWavFile(wavPath, timestamp, options);
   await rm(wavPath, { force: true });
-  return finalizeTranscript(rawText, outputPath, { source: inputUrl, engine }, options);
+  return finalizeTranscript(rawText, outputPath, {
+    source: inputUrl,
+    sourceType: 'url',
+    engine,
+    videoHash: hashStringMd5(inputUrl),
+    sourceUrl: inputUrl
+  }, options);
 }
 
 async function transcribeFromFileStream(sourcePath: string, originalName: string, options: TranscriptionOptions) {
@@ -96,17 +116,30 @@ async function transcribeFromFileStream(sourcePath: string, originalName: string
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
   const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
   const engine = getTranscriptionEngine(options);
+  const videoHash = options.screenshotsEnabled ? await hashFileMd5(sourcePath) : hashStringMd5(sourcePath);
 
   if (engine === ENGINE_LOCAL_STDIN) {
     await assertCommandAvailable(getWhisperCommand());
     const rawText = await runFileToWhisperStdin(sourcePath, timestamp, options);
-    return finalizeTranscript(rawText, outputPath, { source: originalName, engine }, options);
+    return finalizeTranscript(rawText, outputPath, {
+      source: originalName,
+      sourceType: 'file',
+      engine,
+      videoHash,
+      sourcePath
+    }, options);
   }
 
   await runFileToWav(sourcePath, wavPath, options);
   const rawText = await transcribeWavFile(wavPath, timestamp, options);
   await rm(wavPath, { force: true });
-  return finalizeTranscript(rawText, outputPath, { source: originalName, engine }, options);
+  return finalizeTranscript(rawText, outputPath, {
+    source: originalName,
+    sourceType: 'file',
+    engine,
+    videoHash,
+    sourcePath
+  }, options);
 }
 
 async function runUrlToWav(inputUrl: string, wavPath: string, options: TranscriptionOptions): Promise<void> {
@@ -306,7 +339,39 @@ async function finalizeTranscript(
   const summary = summarizeTranscript(cleanTranscript);
   const fileText = formatTranscriptFile({ summary, cleanTranscript, rawTranscript });
   await writeFile(outputPath, fileText, 'utf8');
+
+  if (!options.screenshotsEnabled) {
+    emitProgress(options, 'postprocess', 100, 'Transcript saved');
+    return {
+      text: cleanTranscript,
+      rawText: rawTranscript,
+      cleanText: cleanTranscript,
+      summary,
+      outputPath,
+      source: meta.source,
+      engine: meta.engine
+    };
+  }
+
   emitProgress(options, 'postprocess', 100, 'Transcript saved');
+  const intervalSeconds = normalizeScreenshotIntervalSeconds(options.screenshotIntervalSeconds);
+  const obsidianResult = await createObsidianVault({
+    title: meta.source,
+    summary,
+    cleanText: cleanTranscript,
+    rawText: rawTranscript,
+    source: meta.source,
+    sourceType: meta.sourceType,
+    engine: meta.engine,
+    createdAt: new Date().toISOString(),
+    videoHash: meta.videoHash,
+    screenshotsEnabled: true,
+    screenshotIntervalSeconds: intervalSeconds,
+    screenshots: [],
+    sourcePath: meta.sourcePath,
+    sourceUrl: meta.sourceUrl,
+    onProgress: options.onProgress
+  });
 
   return {
     text: cleanTranscript,
@@ -315,7 +380,10 @@ async function finalizeTranscript(
     summary,
     outputPath,
     source: meta.source,
-    engine: meta.engine
+    engine: meta.engine,
+    markdownPath: obsidianResult.markdownPath,
+    obsidianFolderPath: obsidianResult.obsidianFolderPath,
+    screenshotsCount: obsidianResult.screenshotsCount
   };
 }
 

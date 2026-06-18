@@ -20,6 +20,7 @@ Transcribator
     output/       Runtime transcript files и history.json
     downloads/    Runtime downloaded YouTube videos
     compressed/   Runtime compressed local videos
+    obsidian/     Runtime Obsidian-ready transcript vaults
   docs/agent/     Агентская документация проекта
   package.json    Корневые pnpm workspace commands
   pnpm-lock.yaml  Workspace lockfile
@@ -56,6 +57,7 @@ apps/api
     errors.ts
     index.ts
     jobs.ts
+    obsidianNotes.ts
     pipeline.ts
     postProcess.ts
     types.ts
@@ -82,9 +84,15 @@ apps/api
 
 - `src/pipeline.ts`
   - Основной transcription pipeline.
-  - Использует `runtime/source/`, `runtime/tmp/` и `runtime/output/`.
+  - Использует `runtime/source/`, `runtime/tmp/`, `runtime/output/` и при включенных скриншотах `runtime/obsidian/`.
   - Запускает `yt-dlp`, `ffmpeg`, локальные Whisper engines или OpenAI Audio Transcriptions.
   - Отправляет progress stages в `jobs.ts`.
+
+- `src/obsidianNotes.ts`
+  - Создает Obsidian-ready vault для транскрибации со скриншотами.
+  - Считает `videoHash`: MD5 URL для URL source и MD5 содержимого файла для upload source.
+  - Извлекает screenshots через `ffmpeg`, для URL получает video stream через `yt-dlp`.
+  - Пишет `runtime/obsidian/<videoHash>/transcript.md`, `screenshots/*.jpg` и `metadata.json`.
 
 - `src/videoDownload.ts`
   - Читает доступные video formats через `yt-dlp --dump-json`.
@@ -181,6 +189,7 @@ apps/extension
 - `runtime/output/`: итоговые transcript `.txt` files и `history.json`.
 - `runtime/downloads/`: скачанные YouTube videos.
 - `runtime/compressed/`: сжатые локальные video files.
+- `runtime/obsidian/`: Obsidian-ready transcript vault folders со скриншотами и metadata.
 
 Из этих директорий в git должны попадать только `.gitkeep` files.
 
@@ -200,6 +209,7 @@ CRM или extension
   -> selected transcription engine
   -> postProcessTranscript + summarizeTranscript
   -> runtime/output/<timestamp>.txt
+  -> optional runtime/obsidian/<videoHash>/transcript.md
   -> runtime/output/history.json
   -> SSE progress/done events
   -> CRM result panes и history
@@ -219,8 +229,23 @@ CRM multipart upload
   -> ffmpeg conversion
   -> selected transcription engine
   -> runtime/output/<timestamp>.txt
+  -> optional runtime/obsidian/<videoHash>/transcript.md
   -> runtime/output/history.json
   -> SSE progress/done events
+```
+
+### Obsidian export для транскрибации
+
+```txt
+Transcription request with screenshotsEnabled=true
+  -> shared Zod validation for screenshotsEnabled and screenshotIntervalSeconds
+  -> pipeline.finalizeTranscript
+  -> obsidianNotes.createObsidianVault
+  -> runtime/obsidian/<videoHash>/
+  -> screenshots/0001-00-00-30.jpg
+  -> transcript.md with ![[screenshots/file.jpg]] embeds
+  -> metadata.json with future AI selection placeholders
+  -> result/history markdownPath, obsidianFolderPath, screenshotsCount
 ```
 
 ### Video download
@@ -266,5 +291,5 @@ CRM local video file
 - `apps/*/dist/`
 - `packages/*/dist/`
 - `packages/*/storybook-static/`
-- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/compressed/`, кроме `.gitkeep`
+- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/compressed/`, `runtime/obsidian/`, кроме `.gitkeep`
 - Любой `.env` file

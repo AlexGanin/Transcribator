@@ -108,7 +108,7 @@ pipx install mlx-whisper
 
 ## Runtime storage
 
-`runtime/` — общий локальный каталог для файлов, которые появляются во время работы API. Это не исходники проекта, а рабочие данные: загруженные медиа, временные файлы конвертации, результаты транскрибации и скачанные видео. Каталог нужен, чтобы runtime-артефакты не смешивались с кодом, пакетами и документацией.
+`runtime/` — общий локальный каталог для файлов, которые появляются во время работы API. Это не исходники проекта, а рабочие данные: загруженные медиа, временные файлы конвертации, результаты транскрибации, скачанные видео и Obsidian-заметки. Каталог нужен, чтобы runtime-артефакты не смешивались с кодом, пакетами и документацией.
 
 | Путь | Кто использует | Что появляется внутри |
 | --- | --- | --- |
@@ -117,10 +117,11 @@ pipx install mlx-whisper
 | `runtime/output/` | `apps/api/src/pipeline.ts`, `apps/api/src/jobs.ts` | Итоговые `.txt`-транскрипты и файл `history.json`. Транскрипты создаются после успешной обработки URL или загруженного файла, а `history.json` хранит последние записи истории для UI. |
 | `runtime/downloads/` | `apps/api/src/videoDownload.ts` | Видео, скачанные через вкладку скачивания YouTube. Имя файла формируется из названия ролика и выбранного format id. |
 | `runtime/compressed/` | `apps/api/src/videoCompression.ts` | Сжатые локальные видео из вкладки CRM «Сжать видео». API пишет сюда MP4-файлы H.264 + AAC с безопасным именем, выбранным пресетом и timestamp. |
+| `runtime/obsidian/` | `apps/api/src/obsidianNotes.ts`, `apps/api/src/pipeline.ts` | Obsidian-ready vault folders для транскрибаций со включенными скриншотами. Для каждого видео создается `runtime/obsidian/<videoHash>/`, внутри `transcript.md`, `screenshots/*.jpg` и `metadata.json`. `transcript.md` содержит финальную читаемую Markdown-транскрипцию со скриншотами и метаданными, без сырых `Raw Transcript`/`Clean Transcript` дублей. Для URL `videoHash` — MD5 исходного URL, для upload — MD5 содержимого файла. |
 
-Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/downloads/` и `runtime/compressed/` коммитятся только `.gitkeep` файлы. Все реальные медиа, временные файлы, транскрипты, `history.json`, скачанные и сжатые видео, а также системные файлы вроде `.DS_Store` должны оставаться локальными.
+Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/downloads/`, `runtime/compressed/` и `runtime/obsidian/` коммитятся только `.gitkeep` файлы. Все реальные медиа, временные файлы, транскрипты, `history.json`, скачанные и сжатые видео, Obsidian `.md`, `.jpg`, `metadata.json`, а также системные файлы вроде `.DS_Store` должны оставаться локальными.
 
-Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/`, старых файлов в `runtime/downloads/` и старых сжатых роликов в `runtime/compressed/`. `runtime/output/history.json` и итоговые транскрипты лучше удалять осознанно, потому что они используются экраном истории в CRM.
+Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/`, старых файлов в `runtime/downloads/`, старых сжатых роликов в `runtime/compressed/` и ненужных vault-папок в `runtime/obsidian/`. `runtime/output/history.json` и итоговые транскрипты лучше удалять осознанно, потому что они используются экраном истории в CRM.
 
 ## API surface
 
@@ -152,6 +153,11 @@ File jobs используют:
 - `convert`
 - `transcribe`
 - `postprocess`
+
+Если в запросе транскрибации включен `screenshotsEnabled`, после `postprocess` добавляются stages:
+
+- `screenshots`
+- `obsidian`
 
 CRM отображает stage progress из SSE events и локально считает elapsed time.
 

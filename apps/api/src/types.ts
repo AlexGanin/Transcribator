@@ -47,11 +47,17 @@ export interface CreateJobOptions {
 export interface TranscriptionOptions {
   engine?: TranscriptionEngine | undefined;
   onProgress?: ProgressHandler | undefined;
+  screenshotsEnabled?: boolean | undefined;
+  screenshotIntervalSeconds?: number | undefined;
 }
 
 export interface TranscriptFinalizeMeta {
   source: string;
+  sourceType: 'url' | 'file';
   engine: string;
+  videoHash: string;
+  sourcePath?: string | undefined;
+  sourceUrl?: string | undefined;
 }
 
 export interface TranscriptFileParts {

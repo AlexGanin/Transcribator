@@ -17,13 +17,35 @@ export const healthResponseSchema = z.object({
   ok: z.boolean()
 });
 
+const optionalBooleanRequestSchema = z.preprocess((value) => {
+  if (typeof value === 'string') {
+    return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
+  }
+  return value;
+}, z.boolean().default(false));
+
+const screenshotIntervalSecondsSchema = z.preprocess((value) => {
+  if (value === '' || value === null || value === undefined) return undefined;
+  if (typeof value === 'string') return Number(value);
+  return value;
+}, z.number().int().min(1).max(3600).default(30));
+
+export const transcriptionArtifactOptionsSchema = z.object({
+  screenshotsEnabled: optionalBooleanRequestSchema,
+  screenshotIntervalSeconds: screenshotIntervalSecondsSchema
+});
+
 export const urlTranscriptionRequestSchema = z.object({
   url: z.string().url(),
   engine: transcriptionEngineSchema.optional()
+}).extend({
+  ...transcriptionArtifactOptionsSchema.shape
 });
 
 export const fileTranscriptionRequestSchema = z.object({
   engine: transcriptionEngineSchema.optional()
+}).extend({
+  ...transcriptionArtifactOptionsSchema.shape
 });
 
 export const jobIdResponseSchema = z.object({
@@ -45,6 +67,9 @@ export const transcriptionResultSchema = z.object({
   cleanText: z.string().optional(),
   summary: z.string().optional(),
   outputPath: z.string().optional(),
+  markdownPath: z.string().optional(),
+  obsidianFolderPath: z.string().optional(),
+  screenshotsCount: z.number().int().nonnegative().optional(),
   source: z.string().optional(),
   engine: z.string().optional(),
   originalSizeBytes: z.number().nonnegative().optional(),
@@ -91,6 +116,9 @@ export const historyEntrySchema = z.object({
   elapsedSeconds: z.number().default(0),
   stages: z.array(stageSummarySchema).default([]),
   outputPath: z.string().default(''),
+  markdownPath: z.string().default(''),
+  obsidianFolderPath: z.string().default(''),
+  screenshotsCount: z.number().int().nonnegative().default(0),
   summary: z.string().default(''),
   cleanText: z.string().default(''),
   rawText: z.string().default(''),
@@ -154,6 +182,7 @@ export type ApiError = z.infer<typeof apiErrorSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 export type UrlTranscriptionRequest = z.infer<typeof urlTranscriptionRequestSchema>;
 export type FileTranscriptionRequest = z.infer<typeof fileTranscriptionRequestSchema>;
+export type TranscriptionArtifactOptions = z.infer<typeof transcriptionArtifactOptionsSchema>;
 export type JobIdResponse = z.infer<typeof jobIdResponseSchema>;
 export type StageSummary = z.infer<typeof stageSummarySchema>;
 export type TranscriptionResult = z.infer<typeof transcriptionResultSchema>;

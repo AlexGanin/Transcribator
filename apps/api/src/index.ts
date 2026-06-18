@@ -49,7 +49,12 @@ app.post('/transcribe/url', async (req: Request, res: Response, next: NextFuncti
   try {
     const body = urlTranscriptionRequestSchema.parse(req.body || {});
     const job = createJob(
-      (onProgress) => transcribeUrl(body.url, { engine: body.engine, onProgress }),
+      (onProgress) => transcribeUrl(body.url, {
+        engine: body.engine,
+        screenshotsEnabled: body.screenshotsEnabled,
+        screenshotIntervalSeconds: body.screenshotIntervalSeconds,
+        onProgress
+      }),
       buildJobMetadata('url', body.url, body.engine)
     );
     res.status(202).json({ jobId: job.id });
@@ -62,7 +67,12 @@ app.post('/transcribe/file', upload.single('file'), async (req: Request, res: Re
   try {
     const body = fileTranscriptionRequestSchema.parse(req.body || {});
     const job = createJob(
-      (onProgress) => transcribeFile(req.file, { engine: body.engine, onProgress }),
+      (onProgress) => transcribeFile(req.file, {
+        engine: body.engine,
+        screenshotsEnabled: body.screenshotsEnabled,
+        screenshotIntervalSeconds: body.screenshotIntervalSeconds,
+        onProgress
+      }),
       buildJobMetadata('file', req.file?.originalname, body.engine)
     );
     res.status(202).json({ jobId: job.id });

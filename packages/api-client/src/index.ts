@@ -11,6 +11,7 @@ import {
   type HealthResponse,
   type HistoryResponse,
   type JobIdResponse,
+  type TranscriptionArtifactOptions,
   type TranscriptionEngine,
   type VideoCompressionPreset,
   type VideoDownloadResponse,
@@ -43,7 +44,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   return {
     health: () => requestJson<HealthResponse>(fetcher, baseUrl, '/health', {}, healthResponseSchema),
 
-    transcribeUrl: (url: string, engine?: TranscriptionEngine) =>
+    transcribeUrl: (url: string, engine?: TranscriptionEngine, artifactOptions: Partial<TranscriptionArtifactOptions> = {}) =>
       requestJson<JobIdResponse>(
         fetcher,
         baseUrl,
@@ -51,16 +52,22 @@ export function createApiClient(options: ApiClientOptions = {}) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, engine })
+          body: JSON.stringify({ url, engine, ...artifactOptions })
         },
         jobIdResponseSchema
       ),
 
-    transcribeFile: (file: File, engine?: TranscriptionEngine) => {
+    transcribeFile: (file: File, engine?: TranscriptionEngine, artifactOptions: Partial<TranscriptionArtifactOptions> = {}) => {
       const body = new FormData();
       body.append('file', file);
       if (engine) {
         body.append('engine', engine);
+      }
+      if (artifactOptions.screenshotsEnabled !== undefined) {
+        body.append('screenshotsEnabled', String(artifactOptions.screenshotsEnabled));
+      }
+      if (artifactOptions.screenshotIntervalSeconds !== undefined) {
+        body.append('screenshotIntervalSeconds', String(artifactOptions.screenshotIntervalSeconds));
       }
 
       return requestJson<JobIdResponse>(

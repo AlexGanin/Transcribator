@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Download, FileAudio, FileVideo, Link2, Play, RefreshCw } from 'lucide-react';
+import { Download, FileAudio, FileVideo, Images, Link2, Play, RefreshCw } from 'lucide-react';
 import { ApiClientError, createApiClient } from '@transcribator/api-client';
 import {
   progressEventSchema,
@@ -72,6 +72,8 @@ const STAGE_LABELS: Record<string, string> = {
   convert: 'Convert',
   transcribe: 'Transcribe',
   postprocess: 'Post-process',
+  screenshots: 'Скриншоты',
+  obsidian: 'Obsidian',
   probe: 'Подготовка',
   compress: 'Сжатие'
 };
@@ -105,6 +107,11 @@ export function TranscribatorApp() {
   const [status, setStatus] = React.useState<RunStatus>('idle');
   const [error, setError] = React.useState('');
   const [outputPath, setOutputPath] = React.useState('');
+  const [markdownPath, setMarkdownPath] = React.useState('');
+  const [obsidianFolderPath, setObsidianFolderPath] = React.useState('');
+  const [screenshotsCount, setScreenshotsCount] = React.useState(0);
+  const [screenshotsEnabled, setScreenshotsEnabled] = React.useState(false);
+  const [screenshotIntervalSeconds, setScreenshotIntervalSeconds] = React.useState(30);
   const [stages, setStages] = React.useState<StageState[]>([]);
   const [history, setHistory] = React.useState<HistoryEntry[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
@@ -193,8 +200,11 @@ export function TranscribatorApp() {
     setCleanText('');
     setRawText('');
     setOutputPath('');
+    setMarkdownPath('');
+    setObsidianFolderPath('');
+    setScreenshotsCount(0);
     setElapsedSeconds(0);
-    setStages(createStages(isFileMode ? FILE_STAGES : URL_STAGES));
+    setStages(createStages(buildTranscriptionStages(isFileMode, screenshotsEnabled)));
 
     try {
       if (isFileMode) {
@@ -202,8 +212,14 @@ export function TranscribatorApp() {
       }
 
       const response = isFileMode
-        ? await api.transcribeFile(file as File, engine)
-        : await api.transcribeUrl(url, engine);
+        ? await api.transcribeFile(file as File, engine, {
+          screenshotsEnabled,
+          screenshotIntervalSeconds
+        })
+        : await api.transcribeUrl(url, engine, {
+          screenshotsEnabled,
+          screenshotIntervalSeconds
+        });
 
       if (isFileMode) {
         finishStage('upload');
@@ -234,6 +250,9 @@ export function TranscribatorApp() {
         setCleanText(event.result?.cleanText || event.result?.text || '');
         setRawText(event.result?.rawText || '');
         setOutputPath(event.result?.outputPath || '');
+        setMarkdownPath(event.result?.markdownPath || '');
+        setObsidianFolderPath(event.result?.obsidianFolderPath || '');
+        setScreenshotsCount(event.result?.screenshotsCount || 0);
         finishRun('done');
         void loadHistory();
         eventSourceRef.current = null;
@@ -584,6 +603,33 @@ export function TranscribatorApp() {
                   </Select>
                 </label>
 
+                <section className="grid gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={screenshotsEnabled}
+                      onChange={(event) => setScreenshotsEnabled(event.target.checked)}
+                      disabled={status === 'running'}
+                      className="h-4 w-4"
+                    />
+                    <Images className="h-4 w-4" />
+                    Создавать скриншоты для Obsidian
+                  </label>
+
+                  <label className="grid gap-2 text-sm font-medium">
+                    Интервал скриншотов, сек
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3600}
+                      step={1}
+                      value={screenshotIntervalSeconds}
+                      onChange={(event) => setScreenshotIntervalSeconds(normalizeScreenshotIntervalInput(event.target.value))}
+                      disabled={status === 'running' || !screenshotsEnabled}
+                    />
+                  </label>
+                </section>
+
                 <Button type="submit" disabled={disabled} className="w-fit">
                   <Play className="h-4 w-4" />
                   {status === 'running' ? 'Transcribing...' : 'Transcribe'}
@@ -597,6 +643,13 @@ export function TranscribatorApp() {
                 <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
                   Saved to: {outputPath}
                 </p>
+              )}
+              {markdownPath && (
+                <section className="grid gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+                  <p className="break-words">Markdown для Obsidian: {markdownPath}</p>
+                  <p className="break-words">Папка Obsidian: {obsidianFolderPath}</p>
+                  <p>Скриншотов создано: {screenshotsCount}</p>
+                </section>
               )}
 
               <section className="grid gap-4">
@@ -832,6 +885,14 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
 
         {item.error && <p className="text-sm font-medium text-red-700">{item.error}</p>}
 
+        {item.markdownPath && (
+          <div className="grid gap-1 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="break-words font-medium">Markdown: {item.markdownPath}</p>
+            <p className="break-words">Obsidian folder: {item.obsidianFolderPath}</p>
+            <p>Скриншотов: {item.screenshotsCount}</p>
+          </div>
+        )}
+
         {(item.summary || item.cleanText || item.rawText) && (
           <details className="grid gap-3 text-sm">
             <summary className="cursor-pointer font-medium">Texts</summary>
@@ -872,6 +933,17 @@ function createStages(stageTemplate: Array<{ id: string; label: string }>): Stag
     finishedAt: null,
     indeterminate: false
   }));
+}
+
+function buildTranscriptionStages(isFileMode: boolean, includeObsidian: boolean): Array<{ id: string; label: string }> {
+  const baseStages = isFileMode ? FILE_STAGES : URL_STAGES;
+  return includeObsidian
+    ? [
+      ...baseStages,
+      { id: 'screenshots', label: 'Создать скриншоты' },
+      { id: 'obsidian', label: 'Собрать Obsidian заметку' }
+    ]
+    : baseStages;
 }
 
 function parseProgressEvent(data: string): ProgressEvent | null {
@@ -943,6 +1015,12 @@ function formatSavings(result: VideoCompressionResult) {
 function normalizeVideoStatus(status: RunStatus | 'loading' | 'downloading'): RunStatus {
   if (status === 'loading' || status === 'downloading') return 'running';
   return status;
+}
+
+function normalizeScreenshotIntervalInput(value: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 30;
+  return Math.max(1, Math.min(3600, Math.floor(parsed)));
 }
 
 function engineLabel(value?: string) {

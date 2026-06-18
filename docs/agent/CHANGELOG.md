@@ -2,6 +2,11 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-18
+
+- Изменено: Obsidian `transcript.md` теперь содержит только финальную Markdown-транскрипцию с читаемыми абзацами; сырые `Raw Transcript` и `Clean Transcript` секции больше не выводятся.
+- Добавлено: Obsidian-ready Markdown export для транскрибаций со скриншотами, runtime-папка `runtime/obsidian/`, metadata и поля history/result для Markdown path, Obsidian folder path и количества screenshots.
+
 ## 2026-06-17
 
 - Добавлено: CRM-вкладка «Сжать видео» с локальной загрузкой одного видео, ffprobe/ffmpeg compression pipeline, реальным SSE progress и сохранением результата в `runtime/compressed/`.

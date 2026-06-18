@@ -64,6 +64,7 @@ Runtime-файлы пишутся в корневую папку `runtime/`:
 - `runtime/output/`: транскрипты и `history.json`
 - `runtime/downloads/`: скачанные видео
 - `runtime/compressed/`: сжатые локальные видео
+- `runtime/obsidian/`: Obsidian-ready заметки с финальной Markdown-транскрипцией, screenshots и metadata для транскрибаций со скриншотами
 
 ## Команды
 
@@ -138,6 +139,9 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `POST` | `/videos/download` | Скачать выбранный формат в `runtime/downloads/` |
 | `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 
+Для `/transcribe/url` и `/transcribe/file` можно передать `screenshotsEnabled=true` и `screenshotIntervalSeconds=30`.
+Тогда API создает `runtime/obsidian/<videoHash>/transcript.md`, папку `screenshots/` и `metadata.json`.
+
 ## Структура проекта
 
 ```txt
@@ -155,6 +159,7 @@ runtime/
   output/
   downloads/
   compressed/
+  obsidian/
 docs/agent/
 ```
 
