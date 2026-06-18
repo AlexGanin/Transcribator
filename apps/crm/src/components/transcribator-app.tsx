@@ -1,13 +1,30 @@
 'use client';
 
 import * as React from 'react';
-import { Download, FileAudio, FileVideo, Images, Link2, Play, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  FileAudio,
+  FileVideo,
+  ImageOff,
+  Images,
+  Link2,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Trash2,
+  X
+} from 'lucide-react';
 import { ApiClientError, createApiClient } from '@transcribator/api-client';
 import {
   progressEventSchema,
+  type HistoryDetailResponse,
   type HistoryEntry,
+  type HistoryScreenshot,
   type ProgressEvent,
   type TranscriptionEngine,
+  type UpdateHistoryEntryRequest,
   type VideoCompressionPreset,
   type VideoCompressionResult,
   type VideoFormat
@@ -78,10 +95,12 @@ const STAGE_LABELS: Record<string, string> = {
   compress: 'Сжатие'
 };
 
-type AppTab = 'transcribe' | 'download' | 'compress';
+type AppTab = 'transcribe' | 'history' | 'download' | 'compress';
 type SourceMode = 'url' | 'file';
 type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
+type ScreenshotScope = 'active' | 'trash';
+type HistoryAction = '' | 'trash' | 'restore' | 'clear';
 
 interface StageState {
   id: string;
@@ -92,6 +111,20 @@ interface StageState {
   startedAt: number | null;
   finishedAt: number | null;
   indeterminate: boolean;
+}
+
+interface HistoryEditForm {
+  title: string;
+  source: string;
+  engine: string;
+  summary: string;
+  cleanText: string;
+  rawText: string;
+}
+
+interface LightboxState {
+  scope: ScreenshotScope;
+  screenshot: HistoryScreenshot;
 }
 
 export function TranscribatorApp() {
@@ -114,6 +147,15 @@ export function TranscribatorApp() {
   const [screenshotIntervalSeconds, setScreenshotIntervalSeconds] = React.useState(30);
   const [stages, setStages] = React.useState<StageState[]>([]);
   const [history, setHistory] = React.useState<HistoryEntry[]>([]);
+  const [historyDetail, setHistoryDetail] = React.useState<HistoryDetailResponse | null>(null);
+  const [historyForm, setHistoryForm] = React.useState<HistoryEditForm>(createHistoryEditForm());
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historySaving, setHistorySaving] = React.useState(false);
+  const [historyAction, setHistoryAction] = React.useState<HistoryAction>('');
+  const [historyError, setHistoryError] = React.useState('');
+  const [selectedActiveScreenshots, setSelectedActiveScreenshots] = React.useState<string[]>([]);
+  const [selectedTrashedScreenshots, setSelectedTrashedScreenshots] = React.useState<string[]>([]);
+  const [lightbox, setLightbox] = React.useState<LightboxState | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const [videoUrl, setVideoUrl] = React.useState('');
   const [videoTitle, setVideoTitle] = React.useState('');
@@ -330,13 +372,143 @@ export function TranscribatorApp() {
     setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
   }
 
-  async function loadHistory() {
+  async function loadHistory(options: { showLoading?: boolean; showError?: boolean } = {}) {
+    if (options.showLoading) {
+      setHistoryLoading(true);
+    }
+    if (options.showError) {
+      setHistoryError('');
+    }
+
     try {
       const response = await api.getHistory();
       setHistory(response.history || []);
-    } catch {
+    } catch (caught) {
       setHistory([]);
+      if (options.showError) {
+        setHistoryError(errorMessage(caught, 'Не удалось загрузить историю.'));
+      }
+    } finally {
+      if (options.showLoading) {
+        setHistoryLoading(false);
+      }
     }
+  }
+
+  async function openHistoryDetail(id: string) {
+    setHistoryLoading(true);
+    setHistoryError('');
+    setHistoryDetail(null);
+
+    try {
+      applyHistoryDetail(await api.getHistoryEntry(id));
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось открыть запись истории.'));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function applyHistoryDetail(detail: HistoryDetailResponse) {
+    setHistoryDetail(detail);
+    setHistoryForm(createHistoryEditForm(detail.entry));
+    setSelectedActiveScreenshots([]);
+    setSelectedTrashedScreenshots([]);
+    setLightbox(null);
+  }
+
+  function closeHistoryDetail() {
+    setHistoryDetail(null);
+    setHistoryError('');
+    setSelectedActiveScreenshots([]);
+    setSelectedTrashedScreenshots([]);
+    setLightbox(null);
+  }
+
+  async function saveHistoryDetail() {
+    if (!historyDetail) return;
+
+    setHistorySaving(true);
+    setHistoryError('');
+
+    try {
+      const patch: UpdateHistoryEntryRequest = {
+        title: historyForm.title,
+        source: historyForm.source,
+        engine: historyForm.engine,
+        summary: historyForm.summary,
+        cleanText: historyForm.cleanText,
+        rawText: historyForm.rawText
+      };
+      applyHistoryDetail(await api.updateHistoryEntry(historyDetail.entry.id, patch));
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось сохранить изменения.'));
+    } finally {
+      setHistorySaving(false);
+    }
+  }
+
+  async function trashSelectedScreenshots() {
+    if (!historyDetail || selectedActiveScreenshots.length === 0) return;
+
+    setHistoryAction('trash');
+    setHistoryError('');
+
+    try {
+      applyHistoryDetail(await api.trashHistoryScreenshots(historyDetail.entry.id, selectedActiveScreenshots));
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось перенести скриншоты в корзину.'));
+    } finally {
+      setHistoryAction('');
+    }
+  }
+
+  async function restoreSelectedScreenshots() {
+    if (!historyDetail || selectedTrashedScreenshots.length === 0) return;
+
+    setHistoryAction('restore');
+    setHistoryError('');
+
+    try {
+      applyHistoryDetail(await api.restoreHistoryScreenshots(historyDetail.entry.id, selectedTrashedScreenshots));
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось восстановить скриншоты.'));
+    } finally {
+      setHistoryAction('');
+    }
+  }
+
+  async function clearScreenshotsTrash() {
+    if (!historyDetail || historyDetail.trashedScreenshots.length === 0) return;
+    const confirmed = window.confirm('Окончательно удалить все скриншоты из корзины? Это действие нельзя отменить.');
+    if (!confirmed) return;
+
+    setHistoryAction('clear');
+    setHistoryError('');
+
+    try {
+      applyHistoryDetail(await api.clearHistoryScreenshotsTrash(historyDetail.entry.id));
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось очистить корзину.'));
+    } finally {
+      setHistoryAction('');
+    }
+  }
+
+  function updateHistoryForm<K extends keyof HistoryEditForm>(key: K, value: HistoryEditForm[K]) {
+    setHistoryForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleActiveScreenshot(fileName: string, checked: boolean) {
+    setSelectedActiveScreenshots((current) => toggleSelection(current, fileName, checked));
+  }
+
+  function toggleTrashedScreenshot(fileName: string, checked: boolean) {
+    setSelectedTrashedScreenshots((current) => toggleSelection(current, fileName, checked));
   }
 
   function handleSourceModeChange(nextMode: SourceMode) {
@@ -512,7 +684,9 @@ export function TranscribatorApp() {
     ? compressionStatus
     : activeTab === 'download'
       ? normalizeVideoStatus(videoStatus)
-      : status;
+      : activeTab === 'history'
+        ? 'idle'
+        : status;
 
   return (
     <main className="min-h-screen px-4 py-8 text-neutral-950 sm:px-6 lg:px-8">
@@ -530,6 +704,7 @@ export function TranscribatorApp() {
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AppTab)} className="w-full">
           <TabsList aria-label="App sections">
             <TabsTrigger value="transcribe">Транскрибатор</TabsTrigger>
+            <TabsTrigger value="history">История</TabsTrigger>
             <TabsTrigger value="download">Скачать видео</TabsTrigger>
             <TabsTrigger value="compress">Сжать видео</TabsTrigger>
           </TabsList>
@@ -669,25 +844,43 @@ export function TranscribatorApp() {
                 </label>
               </section>
 
-              <section className="grid gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold">History</h2>
-                  <Button type="button" variant="secondary" onClick={() => void loadHistory()}>
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                  </Button>
-                </div>
+            </section>
+          </TabsContent>
 
-                {history.length === 0 ? (
-                  <p className="text-sm text-neutral-600">No completed runs yet.</p>
-                ) : (
-                  <div className="grid gap-3">
-                    {history.map((item) => (
-                      <HistoryItem item={item} key={item.id} />
-                    ))}
-                  </div>
-                )}
-              </section>
+          <TabsContent value="history">
+            <section className="grid gap-5">
+              {historyDetail ? (
+                <HistoryDetailView
+                  detail={historyDetail}
+                  form={historyForm}
+                  onBack={closeHistoryDetail}
+                  onSave={() => void saveHistoryDetail()}
+                  onFormChange={updateHistoryForm}
+                  saving={historySaving}
+                  action={historyAction}
+                  selectedActive={selectedActiveScreenshots}
+                  selectedTrash={selectedTrashedScreenshots}
+                  onToggleActive={toggleActiveScreenshot}
+                  onToggleTrash={toggleTrashedScreenshot}
+                  onTrashSelected={() => void trashSelectedScreenshots()}
+                  onRestoreSelected={() => void restoreSelectedScreenshots()}
+                  onClearTrash={() => void clearScreenshotsTrash()}
+                  onOpenLightbox={(scope, screenshot) => setLightbox({ scope, screenshot })}
+                />
+              ) : (
+                <HistoryList
+                  history={history}
+                  loading={historyLoading}
+                  onRefresh={() => void loadHistory({ showLoading: true, showError: true })}
+                  onOpen={(id) => void openHistoryDetail(id)}
+                />
+              )}
+
+              {historyError && (
+                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                  {historyError}
+                </p>
+              )}
             </section>
           </TabsContent>
 
@@ -807,6 +1000,10 @@ export function TranscribatorApp() {
             </section>
           </TabsContent>
         </Tabs>
+
+        {lightbox && (
+          <ScreenshotLightbox lightbox={lightbox} onClose={() => setLightbox(null)} />
+        )}
       </div>
     </main>
   );
@@ -859,13 +1056,66 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HistoryItem({ item }: { item: HistoryEntry }) {
+function HistoryList({
+  history,
+  loading,
+  onRefresh,
+  onOpen
+}: {
+  history: HistoryEntry[];
+  loading: boolean;
+  onRefresh: () => void;
+  onOpen: (id: string) => void;
+}) {
   return (
-    <Card>
+    <section className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">История</h2>
+          <p className="mt-1 text-sm text-neutral-600">Сохраненные транскрибации и Obsidian-артефакты.</p>
+        </div>
+        <Button type="button" variant="secondary" onClick={onRefresh} disabled={loading}>
+          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          Обновить
+        </Button>
+      </div>
+
+      {loading && history.length === 0 ? (
+        <p className="text-sm text-neutral-600">Загружаю историю...</p>
+      ) : history.length === 0 ? (
+        <p className="text-sm text-neutral-600">Завершенных транскрибаций пока нет.</p>
+      ) : (
+        <div className="grid gap-3">
+          {history.map((item) => (
+            <HistoryItem item={item} key={item.id} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HistoryItem({ item, onOpen }: { item: HistoryEntry; onOpen: (id: string) => void }) {
+  const title = item.title || item.source || item.sourceType || item.id;
+
+  return (
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(item.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen(item.id);
+        }
+      }}
+      className="cursor-pointer transition hover:border-neutral-300 hover:bg-neutral-50"
+    >
       <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <CardTitle>{engineLabel(item.engine)}</CardTitle>
+          <CardTitle className="break-words">{title}</CardTitle>
           <p className="mt-1 break-words text-sm text-neutral-600">{item.source || item.sourceType}</p>
+          <p className="mt-1 text-xs text-neutral-500">{engineLabel(item.engine)} · {formatHistoryDate(item.finishedAt)}</p>
         </div>
         <div className="grid justify-items-start gap-1 sm:justify-items-end">
           <Badge variant={item.status === 'done' ? 'success' : 'error'}>{item.status}</Badge>
@@ -893,33 +1143,283 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
           </div>
         )}
 
-        {(item.summary || item.cleanText || item.rawText) && (
-          <details className="grid gap-3 text-sm">
-            <summary className="cursor-pointer font-medium">Texts</summary>
-            <div className="mt-3 grid gap-3">
-              {item.summary && (
-                <label className="grid gap-2 font-medium">
-                  Summary
-                  <Textarea className="min-h-32" value={item.summary} readOnly />
-                </label>
-              )}
-              {item.cleanText && (
-                <label className="grid gap-2 font-medium">
-                  Clean transcript
-                  <Textarea className="min-h-32" value={item.cleanText} readOnly />
-                </label>
-              )}
-              {item.rawText && (
-                <label className="grid gap-2 font-medium">
-                  Raw transcript
-                  <Textarea className="min-h-32" value={item.rawText} readOnly />
-                </label>
-              )}
-            </div>
-          </details>
+        {(item.summary || item.cleanText) && (
+          <p className="text-sm text-neutral-700">{previewText(item.summary || item.cleanText)}</p>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function HistoryDetailView({
+  detail,
+  form,
+  onBack,
+  onSave,
+  onFormChange,
+  saving,
+  action,
+  selectedActive,
+  selectedTrash,
+  onToggleActive,
+  onToggleTrash,
+  onTrashSelected,
+  onRestoreSelected,
+  onClearTrash,
+  onOpenLightbox
+}: {
+  detail: HistoryDetailResponse;
+  form: HistoryEditForm;
+  onBack: () => void;
+  onSave: () => void;
+  onFormChange: <K extends keyof HistoryEditForm>(key: K, value: HistoryEditForm[K]) => void;
+  saving: boolean;
+  action: HistoryAction;
+  selectedActive: string[];
+  selectedTrash: string[];
+  onToggleActive: (fileName: string, checked: boolean) => void;
+  onToggleTrash: (fileName: string, checked: boolean) => void;
+  onTrashSelected: () => void;
+  onRestoreSelected: () => void;
+  onClearTrash: () => void;
+  onOpenLightbox: (scope: ScreenshotScope, screenshot: HistoryScreenshot) => void;
+}) {
+  const entry = detail.entry;
+  const systemFields: Array<[string, string | number | undefined]> = [
+    ['id', entry.id],
+    ['status', entry.status],
+    ['startedAt', formatHistoryDate(entry.startedAt)],
+    ['finishedAt', formatHistoryDate(entry.finishedAt)],
+    ['elapsedSeconds', `${entry.elapsedSeconds} сек`],
+    ['outputPath', entry.outputPath],
+    ['markdownPath', entry.markdownPath],
+    ['obsidianFolderPath', entry.obsidianFolderPath]
+  ];
+
+  return (
+    <section className="grid gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button type="button" variant="secondary" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" />
+          Назад
+        </Button>
+        <Button type="button" onClick={onSave} disabled={saving}>
+          <Save className="h-4 w-4" />
+          {saving ? 'Сохраняю...' : 'Сохранить правки'}
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle className="break-words">{form.title || form.source || entry.id}</CardTitle>
+            <p className="mt-1 break-words text-sm text-neutral-600">{form.source || 'Источник не указан'}</p>
+          </div>
+          <Badge variant={entry.status === 'done' ? 'success' : 'error'}>{entry.status}</Badge>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          {systemFields.map(([label, value]) => (
+            <ReadonlyField label={label} value={value} key={label} />
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Содержимое</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium">
+              Title
+              <Input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} />
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              Source
+              <Input value={form.source} onChange={(event) => onFormChange('source', event.target.value)} />
+            </label>
+          </div>
+          <label className="grid gap-2 text-sm font-medium">
+            Engine
+            <Input value={form.engine} onChange={(event) => onFormChange('engine', event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Summary
+            <Textarea className="min-h-36" value={form.summary} onChange={(event) => onFormChange('summary', event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Clean transcript
+            <Textarea className="min-h-80" value={form.cleanText} onChange={(event) => onFormChange('cleanText', event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Raw transcript
+            <Textarea className="min-h-80" value={form.rawText} onChange={(event) => onFormChange('rawText', event.target.value)} />
+          </label>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Card>
+          <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Галерея</CardTitle>
+              <p className="mt-1 text-sm text-neutral-600">Активные скриншоты попадают в `transcript.md`.</p>
+            </div>
+            <Button type="button" variant="secondary" onClick={onTrashSelected} disabled={selectedActive.length === 0 || action === 'trash'}>
+              <Trash2 className="h-4 w-4" />
+              {action === 'trash' ? 'Переношу...' : `В корзину (${selectedActive.length})`}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ScreenshotGrid
+              screenshots={detail.screenshots}
+              scope="active"
+              selected={selectedActive}
+              emptyText="Активных скриншотов нет."
+              onToggle={onToggleActive}
+              onOpen={onOpenLightbox}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="grid gap-3">
+            <div>
+              <CardTitle>Корзина</CardTitle>
+              <p className="mt-1 text-sm text-neutral-600">Файлы здесь уже исключены из Markdown.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onRestoreSelected}
+                disabled={selectedTrash.length === 0 || action === 'restore'}
+              >
+                <RotateCcw className="h-4 w-4" />
+                {action === 'restore' ? 'Восстанавливаю...' : `Вернуть (${selectedTrash.length})`}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onClearTrash}
+                disabled={detail.trashedScreenshots.length === 0 || action === 'clear'}
+              >
+                <Trash2 className="h-4 w-4" />
+                {action === 'clear' ? 'Удаляю...' : 'Очистить'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ScreenshotGrid
+              screenshots={detail.trashedScreenshots}
+              scope="trash"
+              selected={selectedTrash}
+              emptyText="Корзина пуста."
+              onToggle={onToggleTrash}
+              onOpen={onOpenLightbox}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function ScreenshotGrid({
+  screenshots,
+  scope,
+  selected,
+  emptyText,
+  onToggle,
+  onOpen
+}: {
+  screenshots: HistoryScreenshot[];
+  scope: ScreenshotScope;
+  selected: string[];
+  emptyText: string;
+  onToggle: (fileName: string, checked: boolean) => void;
+  onOpen: (scope: ScreenshotScope, screenshot: HistoryScreenshot) => void;
+}) {
+  if (screenshots.length === 0) {
+    return <p className="text-sm text-neutral-600">{emptyText}</p>;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {screenshots.map((screenshot) => {
+        const checked = selected.includes(screenshot.fileName);
+        const imageUrl = apiAssetUrl(screenshot.url);
+
+        return (
+          <div className="grid gap-2" key={screenshot.fileName}>
+            <div className="relative aspect-video overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+              <label className="absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-white/90 shadow-sm">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => onToggle(screenshot.fileName, event.target.checked)}
+                  aria-label={`Выбрать ${screenshot.fileName}`}
+                  className="h-4 w-4"
+                />
+              </label>
+              {screenshot.exists && imageUrl ? (
+                <button
+                  type="button"
+                  className="h-full w-full"
+                  onClick={() => onOpen(scope, screenshot)}
+                  aria-label={`Открыть ${screenshot.fileName}`}
+                >
+                  <img src={imageUrl} alt={screenshot.fileName} loading="lazy" className="h-full w-full object-cover" />
+                </button>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-2 text-center text-xs text-neutral-600">
+                  <ImageOff className="h-5 w-5" />
+                  Файл отсутствует
+                </div>
+              )}
+            </div>
+            <div className="grid gap-0.5 text-xs text-neutral-600">
+              <span className="truncate font-medium text-neutral-800">{screenshot.fileName}</span>
+              <span>{formatElapsed(Math.floor(screenshot.timestampSeconds))}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScreenshotLightbox({ lightbox, onClose }: { lightbox: LightboxState; onClose: () => void }) {
+  const imageUrl = apiAssetUrl(lightbox.screenshot.url);
+
+  if (!imageUrl) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-md bg-white text-neutral-950 shadow-sm"
+        aria-label="Закрыть"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <figure className="grid max-h-full max-w-6xl gap-3">
+        <img src={imageUrl} alt={lightbox.screenshot.fileName} className="max-h-[82vh] max-w-full rounded-md object-contain" />
+        <figcaption className="text-center text-sm text-white">
+          {lightbox.screenshot.fileName} · {lightbox.scope === 'trash' ? 'корзина' : 'галерея'}
+        </figcaption>
+      </figure>
+    </div>
+  );
+}
+
+function ReadonlyField({ label, value }: { label: string; value: string | number | undefined }) {
+  return (
+    <div className="grid gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <span className="text-xs font-medium uppercase text-neutral-500">{label}</span>
+      <span className="break-words text-sm text-neutral-900">{String(value || 'Нет данных')}</span>
+    </div>
   );
 }
 
@@ -933,6 +1433,31 @@ function createStages(stageTemplate: Array<{ id: string; label: string }>): Stag
     finishedAt: null,
     indeterminate: false
   }));
+}
+
+function createHistoryEditForm(entry?: HistoryEntry): HistoryEditForm {
+  return {
+    title: entry?.title || '',
+    source: entry?.source || '',
+    engine: entry?.engine || '',
+    summary: entry?.summary || '',
+    cleanText: entry?.cleanText || '',
+    rawText: entry?.rawText || ''
+  };
+}
+
+function toggleSelection(current: string[], value: string, checked: boolean): string[] {
+  if (checked) {
+    return current.includes(value) ? current : [...current, value];
+  }
+
+  return current.filter((item) => item !== value);
+}
+
+function apiAssetUrl(value: string): string {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
 }
 
 function buildTranscriptionStages(isFileMode: boolean, includeObsidian: boolean): Array<{ id: string; label: string }> {
@@ -976,6 +1501,17 @@ function formatElapsed(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatHistoryDate(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 'Нет данных';
+  return new Date(value).toLocaleString('ru-RU');
+}
+
+function previewText(value: string, maxLength = 220) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength).trim()}...`;
 }
 
 function estimateRemainingSeconds(stage: StageState): number | null {

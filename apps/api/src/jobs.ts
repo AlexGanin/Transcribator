@@ -118,6 +118,7 @@ function buildHistoryEntry(
   return {
     id: job.id,
     status,
+    title: job.metadata.source || '',
     sourceType: job.metadata.sourceType,
     source: job.metadata.source,
     engine: job.metadata.engine,

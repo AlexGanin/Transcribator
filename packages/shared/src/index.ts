@@ -108,6 +108,7 @@ export const progressEventSchema = z.discriminatedUnion('type', [
 export const historyEntrySchema = z.object({
   id: z.string(),
   status: z.enum(['done', 'error']),
+  title: z.string().default(''),
   sourceType: z.string().optional(),
   source: z.string().optional(),
   engine: z.string().optional(),
@@ -127,6 +128,47 @@ export const historyEntrySchema = z.object({
 
 export const historyResponseSchema = z.object({
   history: z.array(historyEntrySchema)
+});
+
+export const screenshotFileNameSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[^/\\]+\.jpg$/i, 'Invalid screenshot file name.');
+
+export const historyScreenshotSchema = z.object({
+  fileName: screenshotFileNameSchema,
+  timestampSeconds: z.number().nonnegative().default(0),
+  exists: z.boolean(),
+  url: z.string().default('')
+});
+
+export const historyDetailResponseSchema = z.object({
+  entry: historyEntrySchema,
+  screenshots: z.array(historyScreenshotSchema).default([]),
+  trashedScreenshots: z.array(historyScreenshotSchema).default([]),
+  metadataPath: z.string().default('')
+});
+
+export const updateHistoryEntryRequestSchema = z.object({
+  title: z.string().optional(),
+  source: z.string().optional(),
+  engine: z.string().optional(),
+  summary: z.string().optional(),
+  cleanText: z.string().optional(),
+  rawText: z.string().optional()
+}).strict();
+
+export const historyScreenshotsRequestSchema = z.object({
+  fileNames: z.array(screenshotFileNameSchema).min(1)
+}).strict();
+
+export const historyScreenshotScopeSchema = z.enum(['active', 'trash']);
+
+export const historyScreenshotsOperationResponseSchema = historyDetailResponseSchema.extend({
+  moved: z.array(screenshotFileNameSchema).default([]),
+  missing: z.array(screenshotFileNameSchema).default([]),
+  deleted: z.array(screenshotFileNameSchema).default([])
 });
 
 export const videoFormatSchema = z.object({
@@ -189,6 +231,13 @@ export type TranscriptionResult = z.infer<typeof transcriptionResultSchema>;
 export type ProgressEvent = z.infer<typeof progressEventSchema>;
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
 export type HistoryResponse = z.infer<typeof historyResponseSchema>;
+export type ScreenshotFileName = z.infer<typeof screenshotFileNameSchema>;
+export type HistoryScreenshot = z.infer<typeof historyScreenshotSchema>;
+export type HistoryDetailResponse = z.infer<typeof historyDetailResponseSchema>;
+export type UpdateHistoryEntryRequest = z.infer<typeof updateHistoryEntryRequestSchema>;
+export type HistoryScreenshotsRequest = z.infer<typeof historyScreenshotsRequestSchema>;
+export type HistoryScreenshotScope = z.infer<typeof historyScreenshotScopeSchema>;
+export type HistoryScreenshotsOperationResponse = z.infer<typeof historyScreenshotsOperationResponseSchema>;
 export type VideoFormat = z.infer<typeof videoFormatSchema>;
 export type VideoFormatsRequest = z.infer<typeof videoFormatsRequestSchema>;
 export type VideoFormatsResponse = z.infer<typeof videoFormatsResponseSchema>;

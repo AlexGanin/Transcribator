@@ -10,7 +10,8 @@
     "dev": "pnpm --filter @transcribator/shared build && tsx src/index.ts",
     "build": "pnpm --filter @transcribator/shared build && tsc",
     "typecheck": "pnpm --filter @transcribator/shared build && tsc --noEmit",
-    "check": "pnpm typecheck"
+    "check": "pnpm typecheck",
+    "test": "node --test --import tsx src/*.test.ts"
   },
   "dependencies": {
     "@transcribator/shared": "workspace:*",

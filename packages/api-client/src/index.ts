@@ -2,17 +2,25 @@ import type { ZodType } from 'zod';
 import {
   apiErrorSchema,
   healthResponseSchema,
+  historyDetailResponseSchema,
   historyResponseSchema,
+  historyScreenshotsOperationResponseSchema,
+  historyScreenshotsRequestSchema,
   jobIdResponseSchema,
+  updateHistoryEntryRequestSchema,
   videoCompressionPresetSchema,
   videoDownloadResponseSchema,
   videoFormatsResponseSchema,
   type ApiError,
   type HealthResponse,
+  type HistoryDetailResponse,
   type HistoryResponse,
+  type HistoryScreenshotScope,
+  type HistoryScreenshotsOperationResponse,
   type JobIdResponse,
   type TranscriptionArtifactOptions,
   type TranscriptionEngine,
+  type UpdateHistoryEntryRequest,
   type VideoCompressionPreset,
   type VideoDownloadResponse,
   type VideoFormatsResponse
@@ -81,6 +89,66 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     getHistory: () =>
       requestJson<HistoryResponse>(fetcher, baseUrl, '/transcribe/history', {}, historyResponseSchema),
+
+    getHistoryEntry: (id: string) =>
+      requestJson<HistoryDetailResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}`,
+        {},
+        historyDetailResponseSchema
+      ),
+
+    updateHistoryEntry: (id: string, patch: UpdateHistoryEntryRequest) =>
+      requestJson<HistoryDetailResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateHistoryEntryRequestSchema.parse(patch))
+        },
+        historyDetailResponseSchema
+      ),
+
+    trashHistoryScreenshots: (id: string, fileNames: string[]) =>
+      requestJson<HistoryScreenshotsOperationResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}/screenshots/trash`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(historyScreenshotsRequestSchema.parse({ fileNames }))
+        },
+        historyScreenshotsOperationResponseSchema
+      ),
+
+    restoreHistoryScreenshots: (id: string, fileNames: string[]) =>
+      requestJson<HistoryScreenshotsOperationResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}/screenshots/restore`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(historyScreenshotsRequestSchema.parse({ fileNames }))
+        },
+        historyScreenshotsOperationResponseSchema
+      ),
+
+    clearHistoryScreenshotsTrash: (id: string) =>
+      requestJson<HistoryScreenshotsOperationResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}/screenshots/trash`,
+        { method: 'DELETE' },
+        historyScreenshotsOperationResponseSchema
+      ),
+
+    historyScreenshotUrl: (id: string, scope: HistoryScreenshotScope, fileName: string) =>
+      `${baseUrl}/transcribe/history/${encodeURIComponent(id)}/screenshots/${scope}/${encodeURIComponent(fileName)}`,
 
     getVideoFormats: (url: string) =>
       requestJson<VideoFormatsResponse>(
