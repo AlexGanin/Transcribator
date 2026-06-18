@@ -14,11 +14,19 @@ import {
   hashStringMd5,
   normalizeScreenshotIntervalSeconds
 } from './obsidianNotes.js';
+import {
+  buildSpeechRanges,
+  formatClipTimestamps,
+  getTranscriptionVadConfig,
+  parseSilencedetectOutput
+} from './speechDetection.js';
+import { buildWhisperArgs } from './whisperArgs.js';
 import type {
   ChildProcessMeta,
   LoggedChildProcess,
   PipelineResult,
   SpawnLoggedOptions,
+  TranscriptSegment,
   TranscriptFileParts,
   TranscriptFinalizeMeta,
   TranscriptionOptions
@@ -275,42 +283,81 @@ async function transcribeWavFile(wavPath: string, timestamp: string, options: Tr
     return text;
   }
 
+  const clipTimestamps = await detectSpeechClipTimestamps(wavPath);
+  if (clipTimestamps === '') {
+    warnTranscriptionFallback('No speech ranges detected after silencedetect; returning an empty transcript.');
+    emitProgress(options, 'transcribe', 100, 'Transcription complete');
+    return '';
+  }
+
   const child = engine === ENGINE_MLX_WHISPER
-    ? await spawnMlxWhisperForInput(wavPath, timestamp)
-    : await spawnOpenAIWhisperForInput(wavPath, timestamp);
+    ? await spawnMlxWhisperForInput(wavPath, timestamp, clipTimestamps ?? '')
+    : await spawnOpenAIWhisperForInput(wavPath, timestamp, clipTimestamps ?? '');
 
   const result = await waitForPipeline([child]);
   emitProgress(options, 'transcribe', 100, 'Transcription complete');
   return readWhisperResult(result, timestamp);
 }
 
-async function spawnOpenAIWhisperForInput(input: string, timestamp: string): Promise<LoggedChildProcess> {
+async function spawnOpenAIWhisperForInput(input: string, timestamp: string, clipTimestamps = ''): Promise<LoggedChildProcess> {
   await assertCommandAvailable(getWhisperCommand());
   const command = getWhisperCommand();
   const outputDir = path.join(TMP_DIR, `whisper-${timestamp}`);
-  const rawArgs = process.env.WHISPER_ARGS || '{input} --model base --output_format txt --output_dir {outputDir}';
-  const args = rawArgs
-    .split(' ')
-    .filter(Boolean)
-    .map((arg) => arg.replaceAll('{input}', input).replaceAll('{outputDir}', outputDir));
+  const rawArgs = process.env.WHISPER_ARGS
+    || '{input} --model base --language ru --condition_on_previous_text False --word_timestamps True --hallucination_silence_threshold 2 --clip_timestamps {clipTimestamps} --output_format txt --output_dir {outputDir}';
+  const args = buildWhisperArgs(rawArgs, { input, outputDir, clipTimestamps });
 
   return spawnLogged(command, args, { captureStdout: true, extra: { outputDir } });
 }
 
-async function spawnMlxWhisperForInput(input: string, timestamp: string): Promise<LoggedChildProcess> {
+async function spawnMlxWhisperForInput(input: string, timestamp: string, clipTimestamps = ''): Promise<LoggedChildProcess> {
   await assertCommandAvailable(getMlxWhisperCommand());
   const command = getMlxWhisperCommand();
   const outputDir = path.join(TMP_DIR, `mlx-whisper-${timestamp}`);
   await mkdir(outputDir, { recursive: true });
 
   const rawArgs = process.env.MLX_WHISPER_ARGS
-    || '{input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}';
-  const args = rawArgs
-    .split(' ')
-    .filter(Boolean)
-    .map((arg) => arg.replaceAll('{input}', input).replaceAll('{outputDir}', outputDir));
+    || '{input} --model mlx-community/whisper-large-v3-turbo --language ru --condition-on-previous-text False --word-timestamps True --hallucination-silence-threshold 2 --clip-timestamps {clipTimestamps} -f txt -o {outputDir}';
+  const args = buildWhisperArgs(rawArgs, { input, outputDir, clipTimestamps });
 
   return spawnLogged(command, args, { captureStdout: true, extra: { outputDir } });
+}
+
+async function detectSpeechClipTimestamps(wavPath: string): Promise<string | null> {
+  const config = getTranscriptionVadConfig();
+
+  try {
+    const ffmpeg = spawnLogged(getFfmpegCommand(), [
+      '-hide_banner',
+      '-nostats',
+      '-i',
+      wavPath,
+      '-af',
+      `silencedetect=noise=${config.noiseDb}:d=${config.minSilenceSeconds}`,
+      '-f',
+      'null',
+      '-'
+    ]);
+
+    await waitForPipeline([ffmpeg]);
+    const parsed = parseSilencedetectOutput(ffmpeg.meta.stderr.join('\n'));
+
+    if (parsed.durationSeconds === null) {
+      warnTranscriptionFallback('Silencedetect did not report audio duration; falling back to full WAV.');
+      return null;
+    }
+
+    const speechRanges = buildSpeechRanges({
+      durationSeconds: parsed.durationSeconds,
+      silenceRanges: parsed.silenceRanges,
+      config
+    });
+
+    return formatClipTimestamps(speechRanges);
+  } catch (error) {
+    warnTranscriptionFallback(`Silencedetect failed; falling back to full WAV. ${errorMessage(error)}`);
+    return null;
+  }
 }
 
 async function transcribeWithOpenAI(wavPath: string): Promise<string> {
@@ -336,6 +383,7 @@ async function finalizeTranscript(
   emitProgress(options, 'postprocess', 10, 'Post-processing transcript');
   const rawTranscript = normalizeRawTranscript(rawText);
   const cleanTranscript = postProcessTranscript(rawTranscript);
+  const segments: TranscriptSegment[] = [];
   const summary = summarizeTranscript(cleanTranscript);
   const fileText = formatTranscriptFile({ summary, cleanTranscript, rawTranscript });
   await writeFile(outputPath, fileText, 'utf8');
@@ -349,7 +397,8 @@ async function finalizeTranscript(
       summary,
       outputPath,
       source: meta.source,
-      engine: meta.engine
+      engine: meta.engine,
+      segments
     };
   }
 
@@ -381,6 +430,7 @@ async function finalizeTranscript(
     outputPath,
     source: meta.source,
     engine: meta.engine,
+    segments,
     markdownPath: obsidianResult.markdownPath,
     obsidianFolderPath: obsidianResult.obsidianFolderPath,
     screenshotsCount: obsidianResult.screenshotsCount
@@ -561,6 +611,14 @@ function normalizeRawTranscript(rawText: string): string {
   return String(rawText || '')
     .replace(/\r\n/g, '\n')
     .trim();
+}
+
+function warnTranscriptionFallback(message: string): void {
+  process.stderr.write(`[transcribe] ${message}\n`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function formatTranscriptFile({ summary, cleanTranscript, rawTranscript }: TranscriptFileParts): string {

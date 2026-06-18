@@ -51,6 +51,13 @@ export interface TranscriptionOptions {
   screenshotIntervalSeconds?: number | undefined;
 }
 
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null | undefined;
+}
+
 export interface TranscriptFinalizeMeta {
   source: string;
   sourceType: 'url' | 'file';

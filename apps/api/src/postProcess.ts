@@ -15,6 +15,8 @@ export function postProcessTranscript(rawText: string): string {
     text = text.replace(pattern, ' ');
   }
 
+  text = removeRepeatedShortPhraseRuns(text);
+
   text = text
     .replace(/\b(\S+)(\s+\1\b){2,}/gi, '$1')
     .replace(/[ \t]+/g, ' ')
@@ -46,6 +48,57 @@ export function postProcessTranscript(rawText: string): string {
   }
 
   return paragraphs.join('\n\n');
+}
+
+function removeRepeatedShortPhraseRuns(text: string): string {
+  const parts = text.match(/\n+|[^.!?\n]+[.!?]?/g) || [];
+  const result: string[] = [];
+
+  for (let index = 0; index < parts.length;) {
+    const part = parts[index] || '';
+    if (/^\n+$/.test(part)) {
+      result.push(part);
+      index += 1;
+      continue;
+    }
+
+    const normalized = normalizeShortPhrase(part);
+    if (!normalized || !isShortPhrase(normalized)) {
+      result.push(part);
+      index += 1;
+      continue;
+    }
+
+    let nextIndex = index + 1;
+    while (nextIndex < parts.length && normalizeShortPhrase(parts[nextIndex] || '') === normalized) {
+      nextIndex += 1;
+    }
+
+    const repeatCount = nextIndex - index;
+    if (repeatCount >= 4) {
+      index = nextIndex;
+      continue;
+    }
+
+    result.push(...parts.slice(index, nextIndex));
+    index = nextIndex;
+  }
+
+  return result.join(' ');
+}
+
+function normalizeShortPhrase(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^\p{L}\p{N}' -]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isShortPhrase(value: string): boolean {
+  const words = value.split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.length <= 4 && value.length <= 40;
 }
 
 export function summarizeTranscript(text: string): string {

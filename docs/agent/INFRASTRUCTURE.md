@@ -73,11 +73,15 @@ Storybook живет внутри `packages/ui`; отдельное прилож
 | `MAX_UPLOAD_SIZE_GB` | `10` | Лимит размера multer upload |
 | `YTDLP_COMMAND` | `yt-dlp` | Команда для скачивания URL |
 | `FFMPEG_COMMAND` | `ffmpeg` | Команда для media conversion |
+| `TRANSCRIBE_SILENCE_NOISE_DB` | `-35dB` | Порог ffmpeg `silencedetect` перед локальной транскрибацией |
+| `TRANSCRIBE_MIN_SILENCE_SECONDS` | `1` | Минимальная длительность тишины для VAD |
+| `TRANSCRIBE_SPEECH_PADDING_SECONDS` | `0.25` | Padding вокруг найденных speech ranges |
+| `TRANSCRIBE_MIN_SPEECH_SECONDS` | `0.4` | Минимальная длительность речевого диапазона |
 | `TRANSCRIPTION_ENGINE` | `openai-whisper` | Движок по умолчанию, если request не задает engine |
 | `WHISPER_COMMAND` | `whisper` | Команда OpenAI Whisper CLI |
-| `WHISPER_ARGS` | `{input} --model base --output_format txt --output_dir {outputDir}` | Аргументы OpenAI Whisper CLI |
+| `WHISPER_ARGS` | `{input} --model base --language ru --condition_on_previous_text False --word_timestamps True --hallucination_silence_threshold 2 --clip_timestamps {clipTimestamps} --output_format txt --output_dir {outputDir}` | Аргументы OpenAI Whisper CLI |
 | `MLX_WHISPER_COMMAND` | `mlx_whisper` | Команда MLX Whisper |
-| `MLX_WHISPER_ARGS` | `{input} --model mlx-community/whisper-large-v3-turbo -f txt -o {outputDir}` | Аргументы MLX Whisper |
+| `MLX_WHISPER_ARGS` | `{input} --model mlx-community/whisper-large-v3-turbo --language ru --condition-on-previous-text False --word-timestamps True --hallucination-silence-threshold 2 --clip-timestamps {clipTimestamps} -f txt -o {outputDir}` | Аргументы MLX Whisper |
 | `OPENAI_API_KEY` | none | Обязательна для engine `openai` |
 | `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | Модель OpenAI Audio Transcriptions |
 
