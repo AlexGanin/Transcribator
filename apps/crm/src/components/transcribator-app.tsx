@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Download,
   FileAudio,
+  FileText,
   FileVideo,
   ImageOff,
   Images,
@@ -17,6 +18,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Sparkles,
   Trash2,
   Undo2,
   X
@@ -113,7 +115,7 @@ type SourceMode = 'url' | 'file';
 type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
 type ScreenshotScope = 'active' | 'trash';
-type HistoryAction = '' | 'trash' | 'restore' | 'clear';
+type HistoryAction = '' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown';
 
 interface StageState {
   id: string;
@@ -131,6 +133,7 @@ interface HistoryEditForm {
   source: string;
   engine: string;
   summary: string;
+  formattedText: string;
   cleanText: string;
   rawText: string;
 }
@@ -158,13 +161,12 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const [file, setFile] = React.useState<File | null>(null);
   const [engine, setEngine] = React.useState<TranscriptionEngine>('mlx-whisper');
   const [summary, setSummary] = React.useState('');
+  const [formattedText, setFormattedText] = React.useState('');
   const [cleanText, setCleanText] = React.useState('');
   const [rawText, setRawText] = React.useState('');
   const [status, setStatus] = React.useState<RunStatus>('idle');
   const [error, setError] = React.useState('');
-  const [outputPath, setOutputPath] = React.useState('');
   const [markdownPath, setMarkdownPath] = React.useState('');
-  const [obsidianFolderPath, setObsidianFolderPath] = React.useState('');
   const [screenshotsCount, setScreenshotsCount] = React.useState(0);
   const [screenshotsEnabled, setScreenshotsEnabled] = React.useState(false);
   const [screenshotIntervalSeconds, setScreenshotIntervalSeconds] = React.useState(30);
@@ -319,11 +321,10 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
     setStatus('running');
     setError('');
     setSummary('');
+    setFormattedText('');
     setCleanText('');
     setRawText('');
-    setOutputPath('');
     setMarkdownPath('');
-    setObsidianFolderPath('');
     setScreenshotsCount(0);
     setElapsedSeconds(0);
     setStages(createStages(buildTranscriptionStages(isFileMode, screenshotsEnabled)));
@@ -369,11 +370,10 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
       if (event.type === 'done') {
         completeAllStages();
         setSummary(event.result?.summary || '');
+        setFormattedText(event.result?.formattedText || '');
         setCleanText(event.result?.cleanText || event.result?.text || '');
         setRawText(event.result?.rawText || '');
-        setOutputPath(event.result?.outputPath || '');
         setMarkdownPath(event.result?.markdownPath || '');
-        setObsidianFolderPath(event.result?.obsidianFolderPath || '');
         setScreenshotsCount(event.result?.screenshotsCount || 0);
         finishRun('done');
         void loadHistory();
@@ -519,6 +519,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
         source: historyForm.source,
         engine: historyForm.engine,
         summary: historyForm.summary,
+        formattedText: historyForm.formattedText,
         cleanText: historyForm.cleanText,
         rawText: historyForm.rawText
       };
@@ -542,6 +543,38 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
       await loadHistory();
     } catch (caught) {
       setHistoryError(errorMessage(caught, 'Не удалось перенести скриншоты в корзину.'));
+    } finally {
+      setHistoryAction('');
+    }
+  }
+
+  async function formatHistoryDetail() {
+    if (!historyDetail) return;
+
+    setHistoryAction('format');
+    setHistoryError('');
+
+    try {
+      applyHistoryDetail(await api.formatHistoryEntry(historyDetail.entry.id));
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось выполнить нейроформатирование.'));
+    } finally {
+      setHistoryAction('');
+    }
+  }
+
+  async function createHistoryMarkdown() {
+    if (!historyDetail) return;
+
+    setHistoryAction('markdown');
+    setHistoryError('');
+
+    try {
+      applyHistoryDetail(await api.createHistoryMarkdown(historyDetail.entry.id));
+      await loadHistory();
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось создать Markdown.'));
     } finally {
       setHistoryAction('');
     }
@@ -964,7 +997,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                       className="h-4 w-4"
                     />
                     <Images className="h-4 w-4" />
-                    Создавать скриншоты для Obsidian
+                    Создавать скриншоты
                   </label>
 
                   <label className="grid gap-2 text-sm font-medium">
@@ -990,23 +1023,27 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
               {showProgress && <ProgressPanel stages={stages} status={status} elapsedSeconds={elapsedSeconds} />}
 
               {error && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{error}</p>}
-              {outputPath && (
-                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
-                  Saved to: {outputPath}
-                </p>
-              )}
               {markdownPath && (
                 <section className="grid gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
-                  <p className="break-words">Markdown для Obsidian: {markdownPath}</p>
-                  <p className="break-words">Папка Obsidian: {obsidianFolderPath}</p>
+                  <p className="break-words">Markdown: {markdownPath}</p>
                   <p>Скриншотов создано: {screenshotsCount}</p>
                 </section>
+              )}
+              {!markdownPath && screenshotsCount > 0 && (
+                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+                  Скриншотов создано: {screenshotsCount}. Markdown можно создать в деталке истории.
+                </p>
               )}
 
               <section className="grid gap-4">
                 <label className="grid gap-2 text-sm font-medium">
                   Summary
-                  <Textarea className="min-h-36" value={summary} readOnly placeholder="Short summary will appear here." />
+                  <Textarea className="min-h-36" value={summary} readOnly placeholder="Summary появится после нейроформатирования." />
+                </label>
+
+                <label className="grid gap-2 text-sm font-medium">
+                  Formatted transcript
+                  <Textarea className="min-h-72" value={formattedText} readOnly placeholder="Нейроформатирование появится здесь." />
                 </label>
 
                 <label className="grid gap-2 text-sm font-medium">
@@ -1031,6 +1068,8 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                   form={historyForm}
                   onBack={closeHistoryDetail}
                   onSave={() => void saveHistoryDetail()}
+                  onFormat={() => void formatHistoryDetail()}
+                  onCreateMarkdown={() => void createHistoryMarkdown()}
                   onFormChange={updateHistoryForm}
                   saving={historySaving}
                   action={historyAction}
@@ -1283,6 +1322,7 @@ function HistoryList({
 
 function HistoryItem({ item, onOpen }: { item: HistoryEntry; onOpen: (id: string) => void }) {
   const title = item.title || item.source || item.sourceType || item.id;
+  const preview = item.summary || item.formattedText || item.cleanText;
 
   return (
     <Card
@@ -1324,13 +1364,12 @@ function HistoryItem({ item, onOpen }: { item: HistoryEntry; onOpen: (id: string
         {item.markdownPath && (
           <div className="grid gap-1 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
             <p className="break-words font-medium">Markdown: {item.markdownPath}</p>
-            <p className="break-words">Obsidian folder: {item.obsidianFolderPath}</p>
             <p>Скриншотов: {item.screenshotsCount}</p>
           </div>
         )}
 
-        {(item.summary || item.cleanText) && (
-          <p className="text-sm text-neutral-700">{previewText(item.summary || item.cleanText)}</p>
+        {preview && (
+          <p className="text-sm text-neutral-700">{previewText(preview)}</p>
         )}
       </CardContent>
     </Card>
@@ -1342,6 +1381,8 @@ function HistoryDetailView({
   form,
   onBack,
   onSave,
+  onFormat,
+  onCreateMarkdown,
   onFormChange,
   saving,
   action,
@@ -1358,6 +1399,8 @@ function HistoryDetailView({
   form: HistoryEditForm;
   onBack: () => void;
   onSave: () => void;
+  onFormat: () => void;
+  onCreateMarkdown: () => void;
   onFormChange: <K extends keyof HistoryEditForm>(key: K, value: HistoryEditForm[K]) => void;
   saving: boolean;
   action: HistoryAction;
@@ -1389,10 +1432,20 @@ function HistoryDetailView({
           <ArrowLeft className="h-4 w-4" />
           Назад
         </Button>
-        <Button type="button" onClick={onSave} disabled={saving}>
-          <Save className="h-4 w-4" />
-          {saving ? 'Сохраняю...' : 'Сохранить правки'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={onFormat} disabled={action === 'format'}>
+            <Sparkles className={cn('h-4 w-4', action === 'format' && 'animate-pulse')} />
+            {action === 'format' ? 'Форматирую...' : 'Нейроформатирование'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCreateMarkdown} disabled={action === 'markdown'}>
+            <FileText className="h-4 w-4" />
+            {action === 'markdown' ? 'Создаю...' : 'Создать Markdown'}
+          </Button>
+          <Button type="button" onClick={onSave} disabled={saving}>
+            <Save className="h-4 w-4" />
+            {saving ? 'Сохраняю...' : 'Сохранить правки'}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -1432,6 +1485,14 @@ function HistoryDetailView({
           <label className="grid gap-2 text-sm font-medium">
             Summary
             <Textarea className="min-h-36" value={form.summary} onChange={(event) => onFormChange('summary', event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Formatted transcript
+            <Textarea
+              className="min-h-80"
+              value={form.formattedText}
+              onChange={(event) => onFormChange('formattedText', event.target.value)}
+            />
           </label>
           <label className="grid gap-2 text-sm font-medium">
             Clean transcript
@@ -1698,6 +1759,7 @@ function createHistoryEditForm(entry?: HistoryEntry): HistoryEditForm {
     source: entry?.source || '',
     engine: entry?.engine || '',
     summary: entry?.summary || '',
+    formattedText: entry?.formattedText || '',
     cleanText: entry?.cleanText || '',
     rawText: entry?.rawText || ''
   };
@@ -1719,13 +1781,7 @@ function apiAssetUrl(value: string): string {
 
 function buildTranscriptionStages(isFileMode: boolean, includeObsidian: boolean): Array<{ id: string; label: string }> {
   const baseStages = isFileMode ? FILE_STAGES : URL_STAGES;
-  return includeObsidian
-    ? [
-      ...baseStages,
-      { id: 'screenshots', label: 'Создать скриншоты' },
-      { id: 'obsidian', label: 'Собрать Obsidian заметку' }
-    ]
-    : baseStages;
+  return includeObsidian ? [...baseStages, { id: 'screenshots', label: 'Создать скриншоты' }] : baseStages;
 }
 
 function parseProgressEvent(data: string): ProgressEvent | null {

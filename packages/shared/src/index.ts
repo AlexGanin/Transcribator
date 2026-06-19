@@ -65,6 +65,7 @@ export const transcriptionResultSchema = z.object({
   text: z.string().optional(),
   rawText: z.string().optional(),
   cleanText: z.string().optional(),
+  formattedText: z.string().optional(),
   summary: z.string().optional(),
   outputPath: z.string().optional(),
   markdownPath: z.string().optional(),
@@ -122,6 +123,7 @@ export const historyEntrySchema = z.object({
   screenshotsCount: z.number().int().nonnegative().default(0),
   summary: z.string().default(''),
   cleanText: z.string().default(''),
+  formattedText: z.string().default(''),
   rawText: z.string().default(''),
   error: z.string().default('')
 });
@@ -156,6 +158,7 @@ export const updateHistoryEntryRequestSchema = z.object({
   engine: z.string().optional(),
   summary: z.string().optional(),
   cleanText: z.string().optional(),
+  formattedText: z.string().optional(),
   rawText: z.string().optional()
 }).strict();
 

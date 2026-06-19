@@ -1,10 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { historyEntrySchema, type ProgressEvent } from '@transcribator/shared';
+import type { ProgressEvent } from '@transcribator/shared';
+import { defaultTranscriptionStore } from './transcriptionStore.js';
 import type {
-  HistoryStageSummary,
   Job,
   CreateJobOptions,
   JobEventWithoutTimestamp,
@@ -17,7 +15,6 @@ import type {
 
 const jobs = new Map<string, Job>();
 const MAX_JOB_AGE_MS = 60 * 60 * 1000;
-const HISTORY_PATH = path.resolve(process.cwd(), '../..', 'runtime', 'output', 'history.json');
 
 export function createJob(task: JobTask, metadata: JobMetadata = {}, options: CreateJobOptions = {}): Job {
   const id = randomUUID();
@@ -38,7 +35,10 @@ export function createJob(task: JobTask, metadata: JobMetadata = {}, options: Cr
     emitJobEvent(job, { type: 'started', jobId: id });
 
     try {
-      const result = await task((event) => emitJobEvent(job, { type: 'progress', ...event }));
+      const result = await task(
+        (event) => emitJobEvent(job, { type: 'progress', ...event }),
+        { jobId: id, startedAt, metadata }
+      );
       job.status = 'done';
       emitJobEvent(job, { type: 'done', result });
       if (persistHistory) {
@@ -63,8 +63,7 @@ export function getJob(id: string): Job | undefined {
 }
 
 export async function listHistory(): Promise<JobHistoryEntry[]> {
-  const history = await readHistory();
-  return history.sort((a, b) => b.startedAt - a.startedAt);
+  return defaultTranscriptionStore.listHistory();
 }
 
 function emitJobEvent(job: Job, event: JobEventWithoutTimestamp): void {
@@ -91,79 +90,31 @@ async function saveHistoryEntry(
   status: TerminalJobStatus,
   finalEvent: { result?: JobTranscriptionResult | undefined; error?: string | undefined }
 ): Promise<void> {
-  const history = await readHistory();
-  const entry = buildHistoryEntry(job, status, finalEvent);
-  history.unshift(entry);
-  await writeFile(HISTORY_PATH, JSON.stringify(history.slice(0, 200), null, 2), 'utf8');
-}
-
-async function readHistory(): Promise<JobHistoryEntry[]> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(HISTORY_PATH, 'utf8'));
-    return historyEntrySchema.array().catch([]).parse(parsed);
-  } catch {
-    return [];
-  }
-}
-
-function buildHistoryEntry(
-  job: Job,
-  status: TerminalJobStatus,
-  finalEvent: { result?: JobTranscriptionResult | undefined; error?: string | undefined }
-): JobHistoryEntry {
-  const startedAt = job.createdAt;
   const finishedAt = Date.now();
-  const stages = summarizeStages(job.events);
-
-  return {
-    id: job.id,
+  const current = defaultTranscriptionStore.getTranscription(job.id);
+  const values = {
     status,
-    title: job.metadata.source || '',
-    sourceType: job.metadata.sourceType,
-    source: job.metadata.source,
-    engine: job.metadata.engine,
-    startedAt,
+    title: job.metadata.source || current?.title || '',
+    sourceType: job.metadata.sourceType || current?.sourceType || '',
+    source: finalEvent.result?.source || job.metadata.source || current?.source || '',
+    engine: finalEvent.result?.engine || job.metadata.engine || current?.engine || '',
+    rawText: finalEvent.result?.rawText || current?.rawText || '',
+    cleanText: finalEvent.result?.cleanText || finalEvent.result?.text || current?.cleanText || '',
+    formattedText: finalEvent.result?.formattedText || current?.formattedText || '',
+    summary: finalEvent.result?.summary || current?.summary || '',
+    markdownPath: finalEvent.result?.markdownPath || current?.markdownPath || '',
+    error: finalEvent.error || current?.error || '',
+    updatedAt: finishedAt,
     finishedAt,
-    elapsedSeconds: Math.floor((finishedAt - startedAt) / 1000),
-    stages,
-    outputPath: finalEvent.result?.outputPath || '',
-    markdownPath: finalEvent.result?.markdownPath || '',
-    obsidianFolderPath: finalEvent.result?.obsidianFolderPath || '',
-    screenshotsCount: finalEvent.result?.screenshotsCount || 0,
-    summary: finalEvent.result?.summary || '',
-    cleanText: finalEvent.result?.cleanText || finalEvent.result?.text || '',
-    rawText: finalEvent.result?.rawText || '',
-    error: finalEvent.error || ''
   };
-}
 
-interface StageAccumulator {
-  id: string;
-  startedAt: number;
-  finishedAt: number | null;
-  elapsedSeconds: number;
-}
-
-function summarizeStages(events: ProgressEvent[]): HistoryStageSummary[] {
-  const stageMap = new Map<string, StageAccumulator>();
-
-  for (const event of events) {
-    if (event.type !== 'progress' || !event.stage) continue;
-
-    const current = stageMap.get(event.stage) || {
-      id: event.stage,
-      startedAt: event.at,
-      finishedAt: null,
-      elapsedSeconds: 0
-    };
-
-    current.startedAt = Math.min(current.startedAt, event.at);
-    if (event.progress >= 100) {
-      current.finishedAt = event.at;
-    }
-    current.elapsedSeconds = Math.floor(((current.finishedAt || event.at) - current.startedAt) / 1000);
-    stageMap.set(event.stage, current);
+  if (current) {
+    defaultTranscriptionStore.patchTranscription(job.id, values);
+  } else {
+    defaultTranscriptionStore.upsertTranscription({
+      id: job.id,
+      ...values,
+      createdAt: job.createdAt
+    });
   }
-
-  return [...stageMap.values()];
 }

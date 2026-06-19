@@ -18,6 +18,7 @@ import {
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
 import { createJob, getJob, listHistory } from './jobs.js';
 import { historyDetailsService } from './historyDetails.js';
+import { defaultTranscriptionStore, migrateHistoryJsonToSqlite } from './transcriptionStore.js';
 import { compressVideo, ensureCompressedDir } from './videoCompression.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
 import { createHttpError, isHttpError } from './errors.js';
@@ -34,6 +35,7 @@ const maxUploadSizeBytes = Math.floor(maxUploadSizeGb * 1024 ** 3);
 await ensureRuntimeDirs();
 await ensureDownloadDir();
 await ensureCompressedDir();
+await migrateHistoryJsonToSqlite({ store: defaultTranscriptionStore });
 await mkdir(uploadDir, { recursive: true });
 
 const upload = multer({
@@ -54,10 +56,12 @@ app.post('/transcribe/url', async (req: Request, res: Response, next: NextFuncti
   try {
     const body = urlTranscriptionRequestSchema.parse(req.body || {});
     const job = createJob(
-      (onProgress) => transcribeUrl(body.url, {
+      (onProgress, context) => transcribeUrl(body.url, {
         engine: body.engine,
         screenshotsEnabled: body.screenshotsEnabled,
         screenshotIntervalSeconds: body.screenshotIntervalSeconds,
+        jobId: context.jobId,
+        startedAt: context.startedAt,
         onProgress
       }),
       buildJobMetadata('url', body.url, body.engine)
@@ -72,10 +76,12 @@ app.post('/transcribe/file', upload.single('file'), async (req: Request, res: Re
   try {
     const body = fileTranscriptionRequestSchema.parse(req.body || {});
     const job = createJob(
-      (onProgress) => transcribeFile(req.file, {
+      (onProgress, context) => transcribeFile(req.file, {
         engine: body.engine,
         screenshotsEnabled: body.screenshotsEnabled,
         screenshotIntervalSeconds: body.screenshotIntervalSeconds,
+        jobId: context.jobId,
+        startedAt: context.startedAt,
         onProgress
       }),
       buildJobMetadata('file', req.file?.originalname, body.engine)
@@ -106,6 +112,22 @@ app.patch('/transcribe/history/:id', async (req: Request<{ id: string }>, res: R
   try {
     const body = updateHistoryEntryRequestSchema.parse(req.body || {});
     res.json(await historyDetailsService.update(req.params.id, body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/transcribe/history/:id/format', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await historyDetailsService.formatWithAi(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/transcribe/history/:id/markdown', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await historyDetailsService.createMarkdown(req.params.id));
   } catch (error) {
     next(error);
   }

@@ -112,6 +112,24 @@ export function createApiClient(options: ApiClientOptions = {}) {
         historyDetailResponseSchema
       ),
 
+    formatHistoryEntry: (id: string) =>
+      requestJson<HistoryDetailResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}/format`,
+        { method: 'POST' },
+        historyDetailResponseSchema
+      ),
+
+    createHistoryMarkdown: (id: string) =>
+      requestJson<HistoryDetailResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}/markdown`,
+        { method: 'POST' },
+        historyDetailResponseSchema
+      ),
+
     trashHistoryScreenshots: (id: string, fileNames: string[]) =>
       requestJson<HistoryScreenshotsOperationResponse>(
         fetcher,

@@ -38,7 +38,14 @@ export type JobEventWithoutTimestamp = ProgressEvent extends infer Event
   : never;
 export type PipelineProgressEvent = Omit<Extract<ProgressEvent, { type: 'progress' }>, 'type' | 'at'>;
 export type ProgressHandler = (event: PipelineProgressEvent) => void;
-export type JobTask = (onProgress: ProgressHandler) => Promise<TranscriptionResult>;
+
+export interface JobTaskContext {
+  jobId: string;
+  startedAt: number;
+  metadata: JobMetadata;
+}
+
+export type JobTask = (onProgress: ProgressHandler, context: JobTaskContext) => Promise<TranscriptionResult>;
 
 export interface CreateJobOptions {
   persistHistory?: boolean | undefined;
@@ -47,6 +54,8 @@ export interface CreateJobOptions {
 export interface TranscriptionOptions {
   engine?: TranscriptionEngine | undefined;
   onProgress?: ProgressHandler | undefined;
+  jobId?: string | undefined;
+  startedAt?: number | undefined;
   screenshotsEnabled?: boolean | undefined;
   screenshotIntervalSeconds?: number | undefined;
 }
@@ -65,12 +74,6 @@ export interface TranscriptFinalizeMeta {
   videoHash: string;
   sourcePath?: string | undefined;
   sourceUrl?: string | undefined;
-}
-
-export interface TranscriptFileParts {
-  summary: string;
-  cleanTranscript: string;
-  rawTranscript: string;
 }
 
 export interface ChildProcessMeta {

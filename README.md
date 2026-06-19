@@ -59,12 +59,14 @@ http://localhost:3001
 
 Runtime-файлы пишутся в корневую папку `runtime/`:
 
+- `runtime/transcribator.sqlite`: основной SQLite-индекс транскрибаций и скриншотов
 - `runtime/source/`: копии загруженных исходных медиа
 - `runtime/tmp/`: uploads, WAV-файлы и папки вывода Whisper
-- `runtime/output/`: транскрипты и `history.json`
+- `runtime/output/`: legacy `history.json` для одноразовой миграции старых записей
+- `runtime/artifacts/`: Markdown-артефакты и screenshots/trash для записей истории
 - `runtime/downloads/`: скачанные видео
 - `runtime/compressed/`: сжатые локальные видео
-- `runtime/obsidian/`: Obsidian-ready заметки с финальной Markdown-транскрипцией, screenshots и metadata для транскрибаций со скриншотами
+- `runtime/obsidian/`: legacy Obsidian-ready заметки старых записей
 
 ## Команды
 
@@ -133,6 +135,10 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `POST` | `/transcribe/url` | Запустить транскрибацию URL |
 | `POST` | `/transcribe/file` | Запустить транскрибацию загруженного файла |
 | `GET` | `/transcribe/history` | Прочитать сохраненную историю |
+| `GET` | `/transcribe/history/:id` | Прочитать деталку записи из SQLite |
+| `PATCH` | `/transcribe/history/:id` | Обновить редактируемые поля записи |
+| `POST` | `/transcribe/history/:id/format` | Запустить placeholder-нейроформатирование |
+| `POST` | `/transcribe/history/:id/markdown` | Создать `runtime/artifacts/<id>/transcript.md` |
 | `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |
 | `GET` | `/jobs/:id/events` | Нейтральный SSE-поток прогресса job |
 | `POST` | `/videos/formats` | Получить доступные форматы видео |
@@ -140,7 +146,8 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 
 Для `/transcribe/url` и `/transcribe/file` можно передать `screenshotsEnabled=true` и `screenshotIntervalSeconds=30`.
-Тогда API создает `runtime/obsidian/<videoHash>/transcript.md`, папку `screenshots/` и `metadata.json`.
+Тогда API создает скриншоты в `runtime/artifacts/<transcription-id>/screenshots/`.
+Markdown больше не создается автоматически: его нужно создать отдельной кнопкой в истории, и он собирается из данных SQLite.
 
 ## Структура проекта
 
@@ -154,9 +161,11 @@ packages/
   shared/       Zod-схемы и общие типы
   ui/           общие shadcn-style UI-компоненты и Storybook
 runtime/
+  transcribator.sqlite
   source/
   tmp/
   output/
+  artifacts/
   downloads/
   compressed/
   obsidian/

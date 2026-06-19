@@ -10,6 +10,7 @@ const ROOT_DIR = path.resolve(process.cwd(), '../..');
 const RUNTIME_DIR = path.join(ROOT_DIR, 'runtime');
 const TMP_DIR = path.join(RUNTIME_DIR, 'tmp');
 export const OBSIDIAN_DIR = path.join(RUNTIME_DIR, 'obsidian');
+export const ARTIFACTS_DIR = path.join(RUNTIME_DIR, 'artifacts');
 const DEFAULT_SCREENSHOT_INTERVAL_SECONDS = 30;
 
 export type ObsidianSourceType = 'url' | 'file';
@@ -46,8 +47,29 @@ export interface ObsidianVaultResult {
   screenshotsCount: number;
 }
 
+export interface CreateScreenshotArtifactsOptions {
+  transcriptionId: string;
+  videoHash: string;
+  sourceType: ObsidianSourceType;
+  screenshotIntervalSeconds: number;
+  sourcePath?: string | undefined;
+  sourceUrl?: string | undefined;
+  onProgress?: ProgressHandler | undefined;
+}
+
+export interface ScreenshotArtifactsResult {
+  artifactFolderPath: string;
+  screenshotsDir: string;
+  screenshots: ObsidianScreenshot[];
+  screenshotsCount: number;
+}
+
 export async function ensureObsidianDir(): Promise<void> {
   await mkdir(OBSIDIAN_DIR, { recursive: true });
+}
+
+export async function ensureArtifactsDir(): Promise<void> {
+  await mkdir(ARTIFACTS_DIR, { recursive: true });
 }
 
 export function hashStringMd5(value: string): string {
@@ -151,7 +173,40 @@ export async function createObsidianVault(options: CreateObsidianVaultOptions): 
   };
 }
 
-interface ExtractScreenshotsOptions extends CreateObsidianVaultOptions {
+export async function createScreenshotArtifacts(
+  options: CreateScreenshotArtifactsOptions
+): Promise<ScreenshotArtifactsResult> {
+  await ensureArtifactsDir();
+  const artifactFolderPath = path.join(ARTIFACTS_DIR, options.transcriptionId);
+  const screenshotsDir = path.join(artifactFolderPath, 'screenshots');
+  const intervalSeconds = normalizeScreenshotIntervalSeconds(options.screenshotIntervalSeconds);
+
+  await mkdir(screenshotsDir, { recursive: true });
+  emitProgress(options, 'screenshots', 5, 'Готовлю папку скриншотов');
+  const screenshots = await extractScreenshots({
+    ...options,
+    screenshotIntervalSeconds: intervalSeconds,
+    screenshotsDir
+  });
+
+  return {
+    artifactFolderPath,
+    screenshotsDir,
+    screenshots,
+    screenshotsCount: screenshots.length
+  };
+}
+
+interface ScreenshotExtractionBase {
+  videoHash: string;
+  sourceType: ObsidianSourceType;
+  screenshotIntervalSeconds: number;
+  sourcePath?: string | undefined;
+  sourceUrl?: string | undefined;
+  onProgress?: ProgressHandler | undefined;
+}
+
+interface ExtractScreenshotsOptions extends ScreenshotExtractionBase {
   screenshotsDir: string;
 }
 

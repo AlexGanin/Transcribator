@@ -1,15 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline as streamPipeline } from 'node:stream/promises';
 import { once } from 'node:events';
 import OpenAI from 'openai';
-import { postProcessTranscript, summarizeTranscript } from './postProcess.js';
 import { createHttpError } from './errors.js';
 import {
-  createObsidianVault,
-  ensureObsidianDir,
+  createScreenshotArtifacts,
+  ensureArtifactsDir,
   hashFileMd5,
   hashStringMd5,
   normalizeScreenshotIntervalSeconds
@@ -26,11 +25,11 @@ import type {
   LoggedChildProcess,
   PipelineResult,
   SpawnLoggedOptions,
-  TranscriptSegment,
-  TranscriptFileParts,
   TranscriptFinalizeMeta,
   TranscriptionOptions
 } from './types.js';
+import { defaultTranscriptionStore } from './transcriptionStore.js';
+import { persistTranscriptText } from './transcriptPersistence.js';
 
 const ROOT_DIR = path.resolve(process.cwd(), '../..');
 const RUNTIME_DIR = path.join(ROOT_DIR, 'runtime');
@@ -48,7 +47,7 @@ export async function ensureRuntimeDirs(): Promise<void> {
     mkdir(SOURCE_DIR, { recursive: true }),
     mkdir(OUTPUT_DIR, { recursive: true }),
     mkdir(TMP_DIR, { recursive: true }),
-    ensureObsidianDir()
+    ensureArtifactsDir()
   ]);
 }
 
@@ -92,13 +91,12 @@ export async function transcribeFile(file: Express.Multer.File | undefined, opti
 async function transcribeFromUrlStream(inputUrl: string, options: TranscriptionOptions) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
-  const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
   const engine = getTranscriptionEngine(options);
 
   if (engine === ENGINE_LOCAL_STDIN) {
     await assertCommandAvailable(getWhisperCommand());
     const rawText = await runUrlToWhisperStdin(inputUrl, timestamp, options);
-    return finalizeTranscript(rawText, outputPath, {
+    return finalizeTranscript(rawText, {
       source: inputUrl,
       sourceType: 'url',
       engine,
@@ -110,7 +108,7 @@ async function transcribeFromUrlStream(inputUrl: string, options: TranscriptionO
   await runUrlToWav(inputUrl, wavPath, options);
   const rawText = await transcribeWavFile(wavPath, timestamp, options);
   await rm(wavPath, { force: true });
-  return finalizeTranscript(rawText, outputPath, {
+  return finalizeTranscript(rawText, {
     source: inputUrl,
     sourceType: 'url',
     engine,
@@ -122,14 +120,13 @@ async function transcribeFromUrlStream(inputUrl: string, options: TranscriptionO
 async function transcribeFromFileStream(sourcePath: string, originalName: string, options: TranscriptionOptions) {
   const timestamp = timestampForFile();
   const wavPath = path.join(TMP_DIR, `${timestamp}.wav`);
-  const outputPath = path.join(OUTPUT_DIR, `${timestamp}.txt`);
   const engine = getTranscriptionEngine(options);
   const videoHash = options.screenshotsEnabled ? await hashFileMd5(sourcePath) : hashStringMd5(sourcePath);
 
   if (engine === ENGINE_LOCAL_STDIN) {
     await assertCommandAvailable(getWhisperCommand());
     const rawText = await runFileToWhisperStdin(sourcePath, timestamp, options);
-    return finalizeTranscript(rawText, outputPath, {
+    return finalizeTranscript(rawText, {
       source: originalName,
       sourceType: 'file',
       engine,
@@ -141,7 +138,7 @@ async function transcribeFromFileStream(sourcePath: string, originalName: string
   await runFileToWav(sourcePath, wavPath, options);
   const rawText = await transcribeWavFile(wavPath, timestamp, options);
   await rm(wavPath, { force: true });
-  return finalizeTranscript(rawText, outputPath, {
+  return finalizeTranscript(rawText, {
     source: originalName,
     sourceType: 'file',
     engine,
@@ -376,64 +373,45 @@ async function transcribeWithOpenAI(wavPath: string): Promise<string> {
 
 async function finalizeTranscript(
   rawText: string,
-  outputPath: string,
   meta: TranscriptFinalizeMeta,
   options: TranscriptionOptions
 ) {
+  const transcriptionId = options.jobId || meta.videoHash || timestampForFile();
+  const createdAt = options.startedAt || Date.now();
   emitProgress(options, 'postprocess', 10, 'Post-processing transcript');
-  const rawTranscript = normalizeRawTranscript(rawText);
-  const cleanTranscript = postProcessTranscript(rawTranscript);
-  const segments: TranscriptSegment[] = [];
-  const summary = summarizeTranscript(cleanTranscript);
-  const fileText = formatTranscriptFile({ summary, cleanTranscript, rawTranscript });
-  await writeFile(outputPath, fileText, 'utf8');
+  const transcriptResult = persistTranscriptText({
+    store: defaultTranscriptionStore,
+    transcriptionId,
+    createdAt,
+    rawText,
+    meta
+  });
 
   if (!options.screenshotsEnabled) {
-    emitProgress(options, 'postprocess', 100, 'Transcript saved');
-    return {
-      text: cleanTranscript,
-      rawText: rawTranscript,
-      cleanText: cleanTranscript,
-      summary,
-      outputPath,
-      source: meta.source,
-      engine: meta.engine,
-      segments
-    };
+    emitProgress(options, 'postprocess', 100, 'Transcript saved to SQLite');
+    return transcriptResult;
   }
 
-  emitProgress(options, 'postprocess', 100, 'Transcript saved');
+  emitProgress(options, 'postprocess', 100, 'Transcript saved to SQLite');
   const intervalSeconds = normalizeScreenshotIntervalSeconds(options.screenshotIntervalSeconds);
-  const obsidianResult = await createObsidianVault({
-    title: meta.source,
-    summary,
-    cleanText: cleanTranscript,
-    rawText: rawTranscript,
-    source: meta.source,
+  const screenshotsResult = await createScreenshotArtifacts({
+    transcriptionId,
     sourceType: meta.sourceType,
-    engine: meta.engine,
-    createdAt: new Date().toISOString(),
     videoHash: meta.videoHash,
-    screenshotsEnabled: true,
     screenshotIntervalSeconds: intervalSeconds,
-    screenshots: [],
     sourcePath: meta.sourcePath,
     sourceUrl: meta.sourceUrl,
     onProgress: options.onProgress
   });
+  defaultTranscriptionStore.addScreenshots(transcriptionId, screenshotsResult.screenshots.map((screenshot) => ({
+    fileName: screenshot.fileName,
+    timestampSeconds: screenshot.timestampSeconds,
+    path: path.join(screenshotsResult.screenshotsDir, screenshot.fileName)
+  })));
 
   return {
-    text: cleanTranscript,
-    rawText: rawTranscript,
-    cleanText: cleanTranscript,
-    summary,
-    outputPath,
-    source: meta.source,
-    engine: meta.engine,
-    segments,
-    markdownPath: obsidianResult.markdownPath,
-    obsidianFolderPath: obsidianResult.obsidianFolderPath,
-    screenshotsCount: obsidianResult.screenshotsCount
+    ...transcriptResult,
+    screenshotsCount: screenshotsResult.screenshotsCount
   };
 }
 
@@ -607,30 +585,10 @@ function safeFileName(fileName: string): string {
     .replace(/^_+/, '') || `upload-${timestampForFile()}`;
 }
 
-function normalizeRawTranscript(rawText: string): string {
-  return String(rawText || '')
-    .replace(/\r\n/g, '\n')
-    .trim();
-}
-
 function warnTranscriptionFallback(message: string): void {
   process.stderr.write(`[transcribe] ${message}\n`);
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function formatTranscriptFile({ summary, cleanTranscript, rawTranscript }: TranscriptFileParts): string {
-  return [
-    '# Summary',
-    summary || 'No summary available.',
-    '',
-    '# Clean Transcript',
-    cleanTranscript || 'No clean transcript available.',
-    '',
-    '# Raw Transcript',
-    rawTranscript || 'No raw transcript available.',
-    ''
-  ].join('\n');
 }
