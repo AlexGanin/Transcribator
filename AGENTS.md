@@ -4,6 +4,31 @@
 
 - Всегда отвечай пользователю на русском языке.
 
+## Документация проекта
+
+- Перед архитектурными ответами, анализом поведения, нетривиальными изменениями и отладкой сначала прочитай `docs/agent/README.md`.
+- Затем прочитай релевантные файлы из `docs/agent/`: `PROJECT_MAP.md`, `INFRASTRUCTURE.md`, `WORKFLOW.md`, `CHANGELOG.md`.
+- Считай `docs/agent/` входной точкой агентских знаний о проекте, но при расхождении документации и кода сверяйся с исходниками.
+- При изменениях поведения, структуры, команд, env vars, runtime paths или workflow обновляй соответствующий файл в `docs/agent/`.
+- При значимых изменениях добавляй запись в `docs/agent/CHANGELOG.md`.
+
+## Границы архитектуры
+
+- `apps/api` владеет Express API, media pipeline, SQLite history, jobs, `ffmpeg`/`yt-dlp`/Whisper и runtime-артефактами.
+- `apps/crm` владеет Next.js CRM UI.
+- `apps/extension` владеет WXT Chrome extension.
+- `packages/shared` содержит Zod-контракты и общие типы.
+- `packages/api-client` содержит fetch-клиент без React, Next, Chrome и Node-specific API.
+- `packages/ui` содержит общие React UI primitives без Next, Chrome и Node-specific API.
+- `runtime/` содержит локальные рабочие данные; в git должны попадать только `.gitkeep`.
+
+## Рабочий процесс
+
+- Перед редактированием запускай `git status --short`.
+- Для поиска используй `rg`.
+- Проверки выбирай по `docs/agent/WORKFLOW.md`.
+- Перед завершением работы и перед коммитом запускай `git diff --check`.
+
 ## Запросы на коммит
 
 Когда пользователь пишет `коммит` или иначе просит сделать коммит:
