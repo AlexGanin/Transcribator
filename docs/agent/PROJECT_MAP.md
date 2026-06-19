@@ -132,6 +132,7 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - transcription history
+  - копирование текста `Clean Transcript` из текущего результата и деталки истории
   - video format selection
   - video downloads
   - local video compression

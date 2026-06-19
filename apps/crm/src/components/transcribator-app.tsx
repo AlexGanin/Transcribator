@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import {
   ArrowLeft,
+  Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   FileAudio,
   FileText,
@@ -66,6 +68,7 @@ import {
   isLightboxUndoKey,
   type LightboxDirection
 } from './history-lightbox-navigation';
+import { buildCleanTranscriptClipboardText } from './transcript-clipboard';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -116,6 +119,7 @@ type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
 type ScreenshotScope = 'active' | 'trash';
 type HistoryAction = '' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown';
+type CopyStatus = 'idle' | 'copied';
 
 interface StageState {
   id: string;
@@ -178,6 +182,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const [historySaving, setHistorySaving] = React.useState(false);
   const [historyAction, setHistoryAction] = React.useState<HistoryAction>('');
   const [historyError, setHistoryError] = React.useState('');
+  const [cleanTranscriptCopyStatus, setCleanTranscriptCopyStatus] = React.useState<CopyStatus>('idle');
   const [selectedActiveScreenshots, setSelectedActiveScreenshots] = React.useState<string[]>([]);
   const [selectedTrashedScreenshots, setSelectedTrashedScreenshots] = React.useState<string[]>([]);
   const [lightbox, setLightbox] = React.useState<LightboxState | null>(null);
@@ -202,6 +207,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const eventSourceRef = React.useRef<EventSource | null>(null);
   const compressionEventSourceRef = React.useRef<EventSource | null>(null);
   const lightboxDeleteInFlightRef = React.useRef(false);
+  const cleanTranscriptCopyTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     void loadHistory();
@@ -209,6 +215,9 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
     return () => {
       eventSourceRef.current?.close();
       compressionEventSourceRef.current?.close();
+      if (cleanTranscriptCopyTimerRef.current !== null) {
+        window.clearTimeout(cleanTranscriptCopyTimerRef.current);
+      }
     };
   }, []);
 
@@ -620,6 +629,26 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
 
   function updateHistoryForm<K extends keyof HistoryEditForm>(key: K, value: HistoryEditForm[K]) {
     setHistoryForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function copyCleanTranscript(value: string) {
+    const text = buildCleanTranscriptClipboardText(value);
+    if (!text) return;
+
+    try {
+      await writeClipboardText(text);
+      setCleanTranscriptCopyStatus('copied');
+
+      if (cleanTranscriptCopyTimerRef.current !== null) {
+        window.clearTimeout(cleanTranscriptCopyTimerRef.current);
+      }
+      cleanTranscriptCopyTimerRef.current = window.setTimeout(() => {
+        setCleanTranscriptCopyStatus('idle');
+        cleanTranscriptCopyTimerRef.current = null;
+      }, 1600);
+    } catch {
+      window.alert('Не удалось скопировать текст. Выдели Clean Transcript вручную.');
+    }
   }
 
   function toggleActiveScreenshot(fileName: string, checked: boolean) {
@@ -1046,10 +1075,22 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                   <Textarea className="min-h-72" value={formattedText} readOnly placeholder="Нейроформатирование появится здесь." />
                 </label>
 
-                <label className="grid gap-2 text-sm font-medium">
-                  Clean transcript
+                <div className="grid gap-2 text-sm font-medium">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Clean transcript</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-fit"
+                      onClick={() => void copyCleanTranscript(cleanText)}
+                      disabled={!buildCleanTranscriptClipboardText(cleanText)}
+                    >
+                      {cleanTranscriptCopyStatus === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {cleanTranscriptCopyStatus === 'copied' ? 'Скопировано' : 'Скопировать'}
+                    </Button>
+                  </div>
                   <Textarea className="min-h-72" value={cleanText} readOnly placeholder="Cleaned transcript will appear here." />
-                </label>
+                </div>
 
                 <label className="grid gap-2 text-sm font-medium">
                   Raw transcript
@@ -1081,6 +1122,8 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                   onRestoreSelected={() => void restoreSelectedScreenshots()}
                   onClearTrash={() => void clearScreenshotsTrash()}
                   onOpenLightbox={openLightbox}
+                  cleanCopyStatus={cleanTranscriptCopyStatus}
+                  onCopyCleanTranscript={() => void copyCleanTranscript(historyForm.cleanText)}
                 />
               ) : (
                 <HistoryList
@@ -1393,7 +1436,9 @@ function HistoryDetailView({
   onTrashSelected,
   onRestoreSelected,
   onClearTrash,
-  onOpenLightbox
+  onOpenLightbox,
+  cleanCopyStatus,
+  onCopyCleanTranscript
 }: {
   detail: HistoryDetailResponse;
   form: HistoryEditForm;
@@ -1412,6 +1457,8 @@ function HistoryDetailView({
   onRestoreSelected: () => void;
   onClearTrash: () => void;
   onOpenLightbox: (scope: ScreenshotScope, screenshot: HistoryScreenshot) => void;
+  cleanCopyStatus: CopyStatus;
+  onCopyCleanTranscript: () => void;
 }) {
   const entry = detail.entry;
   const systemFields: Array<[string, string | number | undefined]> = [
@@ -1494,10 +1541,22 @@ function HistoryDetailView({
               onChange={(event) => onFormChange('formattedText', event.target.value)}
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium">
-            Clean transcript
+          <div className="grid gap-2 text-sm font-medium">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>Clean transcript</span>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-fit"
+                onClick={onCopyCleanTranscript}
+                disabled={!buildCleanTranscriptClipboardText(form.cleanText)}
+              >
+                {cleanCopyStatus === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {cleanCopyStatus === 'copied' ? 'Скопировано' : 'Скопировать'}
+              </Button>
+            </div>
             <Textarea className="min-h-80" value={form.cleanText} onChange={(event) => onFormChange('cleanText', event.target.value)} />
-          </label>
+          </div>
           <label className="grid gap-2 text-sm font-medium">
             Raw transcript
             <Textarea className="min-h-80" value={form.rawText} onChange={(event) => onFormChange('rawText', event.target.value)} />
@@ -1859,6 +1918,29 @@ function formatSavings(result: VideoCompressionResult) {
   }
 
   return `${formatFileSize(savedBytes)} (${percent}%)`;
+}
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error('Clipboard copy failed.');
+  }
 }
 
 function normalizeVideoStatus(status: RunStatus | 'loading' | 'downloading'): RunStatus {
