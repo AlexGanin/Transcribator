@@ -70,7 +70,7 @@ Storybook живет внутри `packages/ui`; отдельное прилож
 | `PORT` | `3001` | Порт Express API |
 | `HOST` | `127.0.0.1` | Host для Express bind |
 | `TRANSCRIBE_TIMEOUT_MS` | `900000` в example, `15 * 60 * 1000` в коде | Останавливает долгие child pipelines |
-| `MAX_UPLOAD_SIZE_GB` | `10` | Лимит размера multer upload |
+| `MAX_UPLOAD_SIZE_GB` | `20` | Лимит размера multer upload |
 | `YTDLP_COMMAND` | `yt-dlp` | Команда для скачивания URL |
 | `FFMPEG_COMMAND` | `ffmpeg` | Команда для media conversion |
 | `TRANSCRIBE_SILENCE_NOISE_DB` | `-35dB` | Порог ffmpeg `silencedetect` перед локальной транскрибацией |

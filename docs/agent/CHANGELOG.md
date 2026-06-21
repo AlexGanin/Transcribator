@@ -2,6 +2,12 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-21
+
+- Изменено: лимит загрузки файлов API `MAX_UPLOAD_SIZE_GB` увеличен с 10 до 20 GiB; обновлены дефолт кода, `apps/api/.env.example` и локальный `apps/api/.env`.
+- Проверено: `node --test --import tsx src/uploadLimit.test.ts`, `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, `git diff --check`.
+- Документация: обновлены `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-19
 
 - Добавлено: историю транскрибаций теперь можно удалять из CRM списка и деталки после подтверждения; API `DELETE /transcribe/history/:id` удаляет запись SQLite, screenshot-строки и `runtime/artifacts/<id>/`, не трогая `runtime/source/`.

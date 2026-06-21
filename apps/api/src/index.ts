@@ -22,6 +22,7 @@ import { defaultTranscriptionStore, migrateHistoryJsonToSqlite } from './transcr
 import { compressVideo, ensureCompressedDir } from './videoCompression.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
 import { createHttpError, isHttpError } from './errors.js';
+import { formatBytes, getMaxUploadSizeBytes } from './uploadLimit.js';
 import type { JobMetadata } from './types.js';
 import type { ProgressEvent, TranscriptionEngine } from '@transcribator/shared';
 
@@ -29,8 +30,7 @@ const app = express();
 const port = Number(process.env.PORT || 3001);
 const host = process.env.HOST || '127.0.0.1';
 const uploadDir = path.resolve(process.cwd(), '../..', 'runtime', 'tmp', 'uploads');
-const maxUploadSizeGb = parsePositiveNumberEnv('MAX_UPLOAD_SIZE_GB', 10);
-const maxUploadSizeBytes = Math.floor(maxUploadSizeGb * 1024 ** 3);
+const maxUploadSizeBytes = getMaxUploadSizeBytes();
 
 await ensureRuntimeDirs();
 await ensureDownloadDir();
@@ -290,16 +290,6 @@ app.listen(port, host, () => {
   console.log(`Transcribator server is running on http://${host}:${port}`);
   console.log(`Max upload size is ${formatBytes(maxUploadSizeBytes)}.`);
 });
-
-function parsePositiveNumberEnv(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function formatBytes(bytes: number): string {
-  const gb = bytes / 1024 ** 3;
-  return `${Number(gb.toFixed(2))} GiB`;
-}
 
 interface ZodIssueLike {
   path?: PropertyKey[] | undefined;
