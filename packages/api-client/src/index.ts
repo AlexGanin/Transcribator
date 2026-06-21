@@ -2,6 +2,7 @@ import type { ZodType } from 'zod';
 import {
   apiErrorSchema,
   healthResponseSchema,
+  historyDeleteResponseSchema,
   historyDetailResponseSchema,
   historyResponseSchema,
   historyScreenshotsOperationResponseSchema,
@@ -13,6 +14,7 @@ import {
   videoFormatsResponseSchema,
   type ApiError,
   type HealthResponse,
+  type HistoryDeleteResponse,
   type HistoryDetailResponse,
   type HistoryResponse,
   type HistoryScreenshotScope,
@@ -110,6 +112,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
           body: JSON.stringify(updateHistoryEntryRequestSchema.parse(patch))
         },
         historyDetailResponseSchema
+      ),
+
+    deleteHistoryEntry: (id: string) =>
+      requestJson<HistoryDeleteResponse>(
+        fetcher,
+        baseUrl,
+        `/transcribe/history/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+        historyDeleteResponseSchema
       ),
 
     formatHistoryEntry: (id: string) =>

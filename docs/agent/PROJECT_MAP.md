@@ -15,9 +15,11 @@ Transcribator
     shared/       Zod schemas, DTOs и общие types
     ui/           общие shadcn-style React components и Storybook UI Kit
   runtime/
+    transcribator.sqlite  Runtime SQLite history index
     source/       Runtime-копии загруженных source files
     tmp/          Runtime temporary uploads, WAV files и CLI output folders
     output/       Runtime transcript files и history.json
+    artifacts/    Runtime Markdown/screenshot artifacts by transcription id
     downloads/    Runtime downloaded YouTube videos
     compressed/   Runtime compressed local videos
     obsidian/     Runtime Obsidian-ready transcript vaults
@@ -119,6 +121,7 @@ apps/crm
     page.tsx
   next.config.ts
   postcss.config.ts
+  src/components/history-delete.ts
   src/components/transcribator-app.tsx
 ```
 
@@ -132,6 +135,7 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - transcription history
+  - удаление записей истории с подтверждением
   - копирование текста `Clean Transcript` из текущего результата и деталки истории
   - video format selection
   - video downloads
@@ -187,7 +191,8 @@ apps/extension
 
 - `runtime/source/`: safe-name copies загруженных source files.
 - `runtime/tmp/`: multer uploads, generated WAV files и Whisper output folders.
-- `runtime/output/`: итоговые transcript `.txt` files и `history.json`.
+- `runtime/output/`: legacy `history.json` для одноразовой миграции старых записей.
+- `runtime/artifacts/`: Markdown, screenshots и trash screenshots для записей истории; удаление истории удаляет папку `runtime/artifacts/<transcription-id>/`.
 - `runtime/downloads/`: скачанные YouTube videos.
 - `runtime/compressed/`: сжатые локальные video files.
 - `runtime/obsidian/`: Obsidian-ready transcript vault folders со скриншотами и metadata.
@@ -281,6 +286,20 @@ CRM local video file
   -> CRM progress, output path и size savings
 ```
 
+### History deletion
+
+```txt
+CRM history list или detail
+  -> window.confirm
+  -> packages/api-client
+  -> DELETE /transcribe/history/:id
+  -> historyDetailsService.deleteEntry
+  -> SQLite transcriptions row delete with screenshots cascade
+  -> remove runtime/artifacts/<transcription-id>/
+  -> keep runtime/source/ files untouched
+  -> CRM refreshes history list or returns from detail to /history
+```
+
 ## Generated и локальные файлы
 
 Не коммить эти файлы, если политика проекта явно не изменилась:
@@ -292,5 +311,5 @@ CRM local video file
 - `apps/*/dist/`
 - `packages/*/dist/`
 - `packages/*/storybook-static/`
-- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/compressed/`, `runtime/obsidian/`, кроме `.gitkeep`
+- Runtime contents в `runtime/downloads/`, `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/artifacts/`, `runtime/compressed/`, `runtime/obsidian/`, кроме `.gitkeep`
 - Любой `.env` file

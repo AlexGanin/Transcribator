@@ -83,6 +83,19 @@ describe('history detail SQLite operations', () => {
     assert.equal(fixture.store.listScreenshots('job-1', 'trash').length, 0);
   });
 
+  it('deletes a history entry from SQLite and removes its artifacts without touching source media', async () => {
+    const fixture = await createHistoryFixture();
+
+    const result = await fixture.service.deleteEntry('job-1');
+
+    assert.deepEqual(result, { id: 'job-1', deleted: true });
+    assert.equal(fixture.store.getTranscription('job-1'), null);
+    assert.deepEqual(fixture.store.listHistory(), []);
+    assert.deepEqual(fixture.store.listScreenshots('job-1'), []);
+    assert.equal(await exists(fixture.artifactsDir), false);
+    assert.equal(await exists(fixture.sourceFilePath), true);
+  });
+
   it('rejects unsafe screenshot file names before touching the filesystem', async () => {
     const fixture = await createHistoryFixture();
 
@@ -121,15 +134,19 @@ async function createHistoryFixture() {
   const runtimeDir = path.join(root, 'runtime');
   const store = createTranscriptionStore({ dbPath: path.join(runtimeDir, 'transcribator.sqlite') });
   const artifactsDir = path.join(runtimeDir, 'artifacts', 'job-1');
+  const sourceDir = path.join(runtimeDir, 'source');
+  const sourceFilePath = path.join(sourceDir, 'uploaded-source.mp4');
   const screenshotsDir = path.join(artifactsDir, 'screenshots');
   const trashScreenshotsDir = path.join(artifactsDir, 'trash', 'screenshots');
   const markdownPath = path.join(artifactsDir, 'transcript.md');
 
   await mkdir(screenshotsDir, { recursive: true });
   await mkdir(trashScreenshotsDir, { recursive: true });
+  await mkdir(sourceDir, { recursive: true });
   await writeFile(path.join(screenshotsDir, '0001-00-00-30.jpg'), 'first-image');
   await writeFile(path.join(screenshotsDir, '0002-00-01-00.jpg'), 'second-image');
   await writeFile(markdownPath, 'old markdown', 'utf8');
+  await writeFile(sourceFilePath, 'source-video');
 
   store.upsertTranscription({
     id: 'job-1',
@@ -165,6 +182,8 @@ async function createHistoryFixture() {
     store,
     root,
     runtimeDir,
+    artifactsDir,
+    sourceFilePath,
     screenshotsDir,
     trashScreenshotsDir,
     markdownPath

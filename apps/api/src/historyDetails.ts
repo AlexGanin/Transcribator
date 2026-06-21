@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   screenshotFileNameSchema,
   type HistoryDetailResponse,
+  type HistoryDeleteResponse,
   type HistoryScreenshot,
   type HistoryScreenshotScope,
   type HistoryScreenshotsOperationResponse,
@@ -28,6 +29,7 @@ export interface HistoryDetailsService {
   update(id: string, patch: UpdateHistoryEntryRequest): Promise<HistoryDetailResponse>;
   formatWithAi(id: string): Promise<HistoryDetailResponse>;
   createMarkdown(id: string): Promise<HistoryDetailResponse>;
+  deleteEntry(id: string): Promise<HistoryDeleteResponse>;
   trashScreenshots(id: string, payload: HistoryScreenshotsRequest): Promise<HistoryScreenshotsOperationResponse>;
   restoreScreenshots(id: string, payload: HistoryScreenshotsRequest): Promise<HistoryScreenshotsOperationResponse>;
   clearScreenshotsTrash(id: string): Promise<HistoryScreenshotsOperationResponse>;
@@ -81,6 +83,13 @@ export function createHistoryDetailsService(options: HistoryDetailsServiceOption
         runtimeDir,
         transcriptionId: id
       });
+    },
+
+    async deleteEntry(id) {
+      ensureTranscriptionExists(store, id);
+      store.deleteTranscription(id);
+      await rm(path.join(runtimeDir, 'artifacts', id), { recursive: true, force: true });
+      return { id, deleted: true };
     },
 
     async trashScreenshots(id, payload) {

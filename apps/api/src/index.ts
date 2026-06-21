@@ -117,6 +117,14 @@ app.patch('/transcribe/history/:id', async (req: Request<{ id: string }>, res: R
   }
 });
 
+app.delete('/transcribe/history/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await historyDetailsService.deleteEntry(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/transcribe/history/:id/format', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
   try {
     res.json(await historyDetailsService.formatWithAi(req.params.id));

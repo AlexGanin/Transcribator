@@ -189,6 +189,14 @@ export class TranscriptionStore {
     });
   }
 
+  deleteTranscription(id: string): TranscriptionRecord | null {
+    const existing = this.getTranscription(id);
+    if (!existing) return null;
+
+    this.db.prepare('DELETE FROM transcriptions WHERE id = ?').run(id);
+    return existing;
+  }
+
   getTranscription(id: string): TranscriptionRecord | null {
     const row = this.db.prepare('SELECT * FROM transcriptions WHERE id = ?').get(id) as TranscriptionRow | undefined;
     return row ? mapTranscriptionRow(row) : null;

@@ -139,6 +139,7 @@ pipx install mlx-whisper
 | `GET` | `/transcribe/history` | Вернуть сохраненные history entries |
 | `GET` | `/transcribe/history/:id` | Вернуть SQLite detail записи, активные screenshots и корзину |
 | `PATCH` | `/transcribe/history/:id` | Обновить `source`, `engine`, `summary`, `formattedText`, `cleanText`, `rawText` |
+| `DELETE` | `/transcribe/history/:id` | Удалить запись истории из SQLite вместе со screenshot-строками и папкой `runtime/artifacts/<id>/`; `runtime/source/` не удаляется |
 | `POST` | `/transcribe/history/:id/format` | Placeholder AI step: fake delay и заполнение `formattedText` текущим лучшим текстом, чтобы позже заменить реальной нейросетью |
 | `POST` | `/transcribe/history/:id/markdown` | Сгенерировать `runtime/artifacts/<id>/transcript.md` из SQLite; выбирает `formattedText`, затем `cleanText`, затем `rawText`, и включает summary только если он уже есть |
 | `POST` | `/transcribe/history/:id/screenshots/trash` | Перенести выбранные active screenshots в `trash/screenshots` и обновить SQLite статус |

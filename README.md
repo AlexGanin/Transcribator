@@ -137,6 +137,7 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `GET` | `/transcribe/history` | Прочитать сохраненную историю |
 | `GET` | `/transcribe/history/:id` | Прочитать деталку записи из SQLite |
 | `PATCH` | `/transcribe/history/:id` | Обновить редактируемые поля записи |
+| `DELETE` | `/transcribe/history/:id` | Удалить запись истории и ее `runtime/artifacts/<id>/` |
 | `POST` | `/transcribe/history/:id/format` | Запустить placeholder-нейроформатирование |
 | `POST` | `/transcribe/history/:id/markdown` | Создать `runtime/artifacts/<id>/transcript.md` |
 | `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |

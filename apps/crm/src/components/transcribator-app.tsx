@@ -60,6 +60,7 @@ import {
   crmNavigationItems,
   type AppView
 } from './crm-navigation';
+import { buildHistoryDeleteConfirmationMessage } from './history-delete';
 import {
   chooseNextLightboxIndex,
   getRestoredLightboxIndex,
@@ -118,7 +119,7 @@ type SourceMode = 'url' | 'file';
 type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
 type ScreenshotScope = 'active' | 'trash';
-type HistoryAction = '' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown';
+type HistoryAction = '' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown' | 'delete';
 type CopyStatus = 'idle' | 'copied';
 
 interface StageState {
@@ -182,6 +183,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const [historySaving, setHistorySaving] = React.useState(false);
   const [historyAction, setHistoryAction] = React.useState<HistoryAction>('');
   const [historyError, setHistoryError] = React.useState('');
+  const [deletingHistoryId, setDeletingHistoryId] = React.useState('');
   const [cleanTranscriptCopyStatus, setCleanTranscriptCopyStatus] = React.useState<CopyStatus>('idle');
   const [selectedActiveScreenshots, setSelectedActiveScreenshots] = React.useState<string[]>([]);
   const [selectedTrashedScreenshots, setSelectedTrashedScreenshots] = React.useState<string[]>([]);
@@ -538,6 +540,37 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
       setHistoryError(errorMessage(caught, 'Не удалось сохранить изменения.'));
     } finally {
       setHistorySaving(false);
+    }
+  }
+
+  async function deleteHistoryEntry(entry: HistoryEntry) {
+    const confirmed = window.confirm(buildHistoryDeleteConfirmationMessage(entry));
+    if (!confirmed) return;
+
+    setDeletingHistoryId(entry.id);
+    setHistoryAction('delete');
+    setHistoryError('');
+
+    try {
+      await api.deleteHistoryEntry(entry.id);
+      setHistory((current) => current.filter((item) => item.id !== entry.id));
+
+      if (historyDetail?.entry.id === entry.id) {
+        setHistoryDetail(null);
+        setHistoryForm(createHistoryEditForm());
+        setSelectedActiveScreenshots([]);
+        setSelectedTrashedScreenshots([]);
+        setLightbox(null);
+        setLastLightboxTrash(null);
+        router.push('/history');
+      } else {
+        await loadHistory();
+      }
+    } catch (caught) {
+      setHistoryError(errorMessage(caught, 'Не удалось удалить запись истории.'));
+    } finally {
+      setDeletingHistoryId('');
+      setHistoryAction('');
     }
   }
 
@@ -1124,13 +1157,17 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                   onOpenLightbox={openLightbox}
                   cleanCopyStatus={cleanTranscriptCopyStatus}
                   onCopyCleanTranscript={() => void copyCleanTranscript(historyForm.cleanText)}
+                  deleting={deletingHistoryId === historyDetail.entry.id || historyAction === 'delete'}
+                  onDelete={() => void deleteHistoryEntry(historyDetail.entry)}
                 />
               ) : (
                 <HistoryList
                   history={history}
                   loading={historyLoading}
+                  deletingId={deletingHistoryId}
                   onRefresh={() => void loadHistory({ showLoading: true, showError: true })}
                   onOpen={(id) => router.push(buildHistoryDetailPath(id))}
+                  onDelete={(entry) => void deleteHistoryEntry(entry)}
                 />
               )}
 
@@ -1327,13 +1364,17 @@ function Metric({ label, value }: { label: string; value: string }) {
 function HistoryList({
   history,
   loading,
+  deletingId,
   onRefresh,
-  onOpen
+  onOpen,
+  onDelete
 }: {
   history: HistoryEntry[];
   loading: boolean;
+  deletingId: string;
   onRefresh: () => void;
   onOpen: (id: string) => void;
+  onDelete: (entry: HistoryEntry) => void;
 }) {
   return (
     <section className="grid gap-4">
@@ -1355,7 +1396,13 @@ function HistoryList({
       ) : (
         <div className="grid gap-3">
           {history.map((item) => (
-            <HistoryItem item={item} key={item.id} onOpen={onOpen} />
+            <HistoryItem
+              item={item}
+              key={item.id}
+              deleting={deletingId === item.id}
+              onOpen={onOpen}
+              onDelete={onDelete}
+            />
           ))}
         </div>
       )}
@@ -1363,7 +1410,17 @@ function HistoryList({
   );
 }
 
-function HistoryItem({ item, onOpen }: { item: HistoryEntry; onOpen: (id: string) => void }) {
+function HistoryItem({
+  item,
+  deleting,
+  onOpen,
+  onDelete
+}: {
+  item: HistoryEntry;
+  deleting: boolean;
+  onOpen: (id: string) => void;
+  onDelete: (entry: HistoryEntry) => void;
+}) {
   const title = item.title || item.source || item.sourceType || item.id;
   const preview = item.summary || item.formattedText || item.cleanText;
 
@@ -1389,6 +1446,20 @@ function HistoryItem({ item, onOpen }: { item: HistoryEntry; onOpen: (id: string
         <div className="grid justify-items-start gap-1 sm:justify-items-end">
           <Badge variant={item.status === 'done' ? 'success' : 'error'}>{item.status}</Badge>
           <strong className="text-sm">{formatElapsed(item.elapsedSeconds)}</strong>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(item);
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+            disabled={deleting}
+          >
+            <Trash2 className="h-4 w-4" />
+            {deleting ? 'Удаляю...' : 'Удалить'}
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -1438,7 +1509,9 @@ function HistoryDetailView({
   onClearTrash,
   onOpenLightbox,
   cleanCopyStatus,
-  onCopyCleanTranscript
+  onCopyCleanTranscript,
+  deleting,
+  onDelete
 }: {
   detail: HistoryDetailResponse;
   form: HistoryEditForm;
@@ -1459,6 +1532,8 @@ function HistoryDetailView({
   onOpenLightbox: (scope: ScreenshotScope, screenshot: HistoryScreenshot) => void;
   cleanCopyStatus: CopyStatus;
   onCopyCleanTranscript: () => void;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   const entry = detail.entry;
   const systemFields: Array<[string, string | number | undefined]> = [
@@ -1487,6 +1562,10 @@ function HistoryDetailView({
           <Button type="button" variant="secondary" onClick={onCreateMarkdown} disabled={action === 'markdown'}>
             <FileText className="h-4 w-4" />
             {action === 'markdown' ? 'Создаю...' : 'Создать Markdown'}
+          </Button>
+          <Button type="button" variant="destructive" onClick={onDelete} disabled={deleting}>
+            <Trash2 className="h-4 w-4" />
+            {deleting ? 'Удаляю...' : 'Удалить'}
           </Button>
           <Button type="button" onClick={onSave} disabled={saving}>
             <Save className="h-4 w-4" />

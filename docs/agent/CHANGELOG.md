@@ -4,6 +4,10 @@
 
 ## 2026-06-19
 
+- Добавлено: историю транскрибаций теперь можно удалять из CRM списка и деталки после подтверждения; API `DELETE /transcribe/history/:id` удаляет запись SQLite, screenshot-строки и `runtime/artifacts/<id>/`, не трогая `runtime/source/`.
+- Проверено: `pnpm --filter @transcribator/api test`, `node --test --import tsx ../crm/src/components/history-delete.test.ts`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, `pnpm --filter @transcribator/shared check`, `pnpm --filter @transcribator/api-client check`, `pnpm --filter @transcribator/crm check`, `git diff --check`.
+- Документация: обновлены `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 - Добавлено: CRM теперь умеет копировать `Clean Transcript` из текущего результата транскрибации и деталки истории для ручной обработки в ChatGPT.
 - Проверено: `pnpm --filter @transcribator/crm check`.
 - Документация: обновлен `docs/agent/PROJECT_MAP.md`.

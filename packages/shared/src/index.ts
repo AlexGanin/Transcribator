@@ -132,6 +132,11 @@ export const historyResponseSchema = z.object({
   history: z.array(historyEntrySchema)
 });
 
+export const historyDeleteResponseSchema = z.object({
+  id: z.string(),
+  deleted: z.literal(true)
+});
+
 export const screenshotFileNameSchema = z
   .string()
   .min(1)
@@ -234,6 +239,7 @@ export type TranscriptionResult = z.infer<typeof transcriptionResultSchema>;
 export type ProgressEvent = z.infer<typeof progressEventSchema>;
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
 export type HistoryResponse = z.infer<typeof historyResponseSchema>;
+export type HistoryDeleteResponse = z.infer<typeof historyDeleteResponseSchema>;
 export type ScreenshotFileName = z.infer<typeof screenshotFileNameSchema>;
 export type HistoryScreenshot = z.infer<typeof historyScreenshotSchema>;
 export type HistoryDetailResponse = z.infer<typeof historyDetailResponseSchema>;
