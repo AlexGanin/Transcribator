@@ -74,7 +74,7 @@ apps/api
 - `src/index.ts`
   - Entry point Express app.
   - Загружает `apps/api/.env`.
-  - Биндится к `HOST` и `PORT`, по умолчанию `127.0.0.1:3001`.
+  - Биндится к `HOST` и `PORT`, по умолчанию `127.0.0.1:2001`.
   - Настраивает CORS, JSON parsing, multer uploads, route handlers, SSE и error handling.
   - Валидирует request bodies схемами из `@transcribator/shared`.
 
@@ -126,7 +126,7 @@ apps/crm
 ```
 
 - Next.js App Router TypeScript app.
-- Запускается на `127.0.0.1:3002`.
+- Запускается на `127.0.0.1:2000`.
 - Использует `@transcribator/api-client` для каждого API-вызова.
 - Использует `@transcribator/ui` для общих controls.
 - Реализует:
@@ -184,7 +184,7 @@ apps/extension
 - Содержит Button, Input, Textarea, Select, Tabs, Progress, Badge и Card primitives.
 - Каждый компонент лежит в отдельной папке `src/components/<component>/index.tsx`, чтобы рядом можно было хранить stories, notes и component-local files.
 - Storybook живет внутри пакета: `.storybook/`, `src/storybook.css`, component stories рядом с `index.tsx` и `src/stories/patterns.stories.tsx`.
-- Root command `pnpm storybook` запускает `@transcribator/ui` Storybook на `http://localhost:6006`.
+- Root command `pnpm storybook` запускает `@transcribator/ui` Storybook на `http://127.0.0.1:2002`.
 - Должен оставаться framework-agnostic: без Next APIs, Chrome APIs или Node APIs.
 
 ## Runtime-директории

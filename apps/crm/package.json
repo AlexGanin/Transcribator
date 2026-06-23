@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && next dev -H 127.0.0.1 -p 3002",
+    "dev": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && next dev -H 127.0.0.1 -p 2000",
     "build": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && next build",
     "typecheck": "pnpm --filter @transcribator/shared build && pnpm --filter @transcribator/api-client build && pnpm --filter @transcribator/ui build && tsc --noEmit",
     "check": "pnpm typecheck && pnpm build"

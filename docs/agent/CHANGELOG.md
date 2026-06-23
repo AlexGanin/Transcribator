@@ -2,6 +2,12 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-23
+
+- Изменено: локальные порты Transcribator перенесены в диапазон 2000: CRM `127.0.0.1:2000`, API `127.0.0.1:2001`, Storybook `127.0.0.1:2002`; клиентские дефолты теперь используют `127.0.0.1`, чтобы избежать IPv6-конфликтов `localhost`; добавлен `.nvmrc` для Node `24.17.0`.
+- Проверено: `node --test --import tsx ../../packages/api-client/src/index.test.ts`, `pnpm --filter @transcribator/shared check`, `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, `pnpm --filter @transcribator/api-client check`, `pnpm --filter @transcribator/crm check`, `pnpm --filter @transcribator/extension check`, `pnpm --filter @transcribator/ui typecheck`, `pnpm --filter @transcribator/ui build`, `curl -sS http://127.0.0.1:2001/health`, `curl -sS -I http://127.0.0.1:2000/compress`, smoke `POST /videos/compress` на `127.0.0.1:2001`, `git diff --check`.
+- Документация: обновлены `README.md`, `docs/agent/README.md`, `docs/agent/INFRASTRUCTURE.md`, `docs/agent/PROJECT_MAP.md`, `docs/agent/WORKFLOW.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-21
 
 - Изменено: лимит загрузки файлов API `MAX_UPLOAD_SIZE_GB` увеличен с 10 до 20 GiB; обновлены дефолт кода, `apps/api/.env.example` и локальный `apps/api/.env`.

@@ -27,7 +27,7 @@ import type { JobMetadata } from './types.js';
 import type { ProgressEvent, TranscriptionEngine } from '@transcribator/shared';
 
 const app = express();
-const port = Number(process.env.PORT || 3001);
+const port = Number(process.env.PORT || 2001);
 const host = process.env.HOST || '127.0.0.1';
 const uploadDir = path.resolve(process.cwd(), '../..', 'runtime', 'tmp', 'uploads');
 const maxUploadSizeBytes = getMaxUploadSizeBytes();

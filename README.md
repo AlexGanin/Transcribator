@@ -4,8 +4,8 @@
 
 ## Что умеет проект
 
-- `apps/crm`: CRM на Next.js App Router по адресу `http://localhost:3002`.
-- `apps/api`: Express API на TypeScript по адресу `http://localhost:3001`.
+- `apps/crm`: CRM на Next.js App Router по адресу `http://127.0.0.1:2000`.
+- `apps/api`: Express API на TypeScript по адресу `http://127.0.0.1:2001`.
 - `apps/extension`: каркас Chrome extension на WXT, React и Manifest V3.
 - `packages/shared`: Zod-контракты API, DTO и общие типы.
 - `packages/api-client`: fetch-клиент, который используют CRM и extension.
@@ -33,6 +33,7 @@ pipx install mlx-whisper
 
 ```sh
 corepack enable
+nvm use
 pnpm install
 cp apps/api/.env.example apps/api/.env
 ```
@@ -48,13 +49,13 @@ pnpm dev
 Открыть:
 
 ```txt
-http://localhost:3002
+http://127.0.0.1:2000
 ```
 
 API:
 
 ```txt
-http://localhost:3001
+http://127.0.0.1:2001
 ```
 
 Runtime-файлы пишутся в корневую папку `runtime/`:
@@ -86,7 +87,7 @@ pnpm storybook
 pnpm build-storybook
 ```
 
-Storybook открывается на `http://localhost:6006`.
+Storybook открывается на `http://127.0.0.1:2002`.
 
 Отдельный workspace-пакет можно запустить через `--filter`, например:
 

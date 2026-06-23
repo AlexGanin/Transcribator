@@ -109,8 +109,8 @@ git diff --check
 
 ```sh
 pnpm dev
-curl -sS http://127.0.0.1:3001/health
-curl -sS -I http://127.0.0.1:3002/
+curl -sS http://127.0.0.1:2001/health
+curl -sS -I http://127.0.0.1:2000/
 ```
 
 Останавливай dev server после smoke-check, если пользователь не просил оставить его запущенным.

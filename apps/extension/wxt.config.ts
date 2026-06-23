@@ -8,7 +8,7 @@ export default defineConfig({
     description: 'Local helper for sending YouTube pages to the Transcribator API.',
     version: '1.0.0',
     permissions: ['activeTab', 'storage', 'tabs'],
-    host_permissions: ['http://localhost:3001/*', 'http://127.0.0.1:3001/*', '*://*.youtube.com/*'],
+    host_permissions: ['http://127.0.0.1:2001/*', '*://*.youtube.com/*'],
     action: {
       default_title: 'Transcribator'
     }

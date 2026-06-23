@@ -48,7 +48,7 @@ export class ApiClientError extends Error {
 }
 
 export function createApiClient(options: ApiClientOptions = {}) {
-  const baseUrl = normalizeBaseUrl(options.baseUrl || 'http://localhost:3001');
+  const baseUrl = normalizeBaseUrl(options.baseUrl || 'http://127.0.0.1:2001');
   const fetcher = options.fetchImpl || fetch;
 
   return {

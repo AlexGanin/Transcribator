@@ -3,7 +3,7 @@ import { browser } from 'wxt/browser';
 import { ApiClientError, createApiClient } from '@transcribator/api-client';
 import type { TranscriptionEngine } from '@transcribator/shared';
 
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:2001';
 const ENGINES: Array<{ value: TranscriptionEngine; label: string }> = [
   { value: 'mlx-whisper', label: 'MLX Whisper' },
   { value: 'openai-whisper', label: 'OpenAI Whisper' },

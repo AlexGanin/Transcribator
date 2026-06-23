@@ -71,7 +71,7 @@ import {
 } from './history-lightbox-navigation';
 import { buildCleanTranscriptClipboardText } from './transcript-clipboard';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:2001';
 
 const URL_STAGES = [
   { id: 'download', label: 'Download and convert audio' },
