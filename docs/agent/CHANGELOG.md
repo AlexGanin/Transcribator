@@ -2,6 +2,14 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-26
+
+- Добавлено: YouTube video backlog: Chrome extension показывает кнопку «Добавить» на страницах YouTube, API сохраняет ролики в SQLite `youtube_videos`, CRM получила страницу `/videos`, а `packages/api-client` и `packages/shared` получили контракты `/videos/library`.
+- Изменено: extension автоматически мигрирует старый локальный API default `3001` на текущий `2001`, чтобы ранее установленный popup/content script не ловил `Failed to fetch`.
+- Изменено: кнопка добавления видео в extension теперь явно называется «Добавить видео» и есть в popup как отдельное действие от `Transcribe`.
+- Проверено: `pnpm --filter @transcribator/shared check`, `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api-client check`, `pnpm --filter @transcribator/extension check`, `pnpm --filter @transcribator/crm check`, точечные `node --test` для `packages/api-client/src/index.test.ts`, `apps/crm/src/components/crm-navigation.test.ts`, `apps/extension/src/api-base-url.test.ts`, `apps/extension/src/video-library-action.test.ts` и `apps/extension/src/youtube-video.test.ts`.
+- Документация: обновлены `README.md`, `docs/agent/README.md`, `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-24
 
 - Изменено: локальное сжатие видео переведено с CPU `libx264`/CRF на Apple VideoToolbox `hevc_videotoolbox` с MP4 `hvc1`, запретом software fallback (`-allow_sw 0`), ускоренным режимом `-prio_speed 1` и bitrate-пресетами для MacBook screen recordings: `4500k`/`3500k`/`2500k`.

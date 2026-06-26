@@ -65,6 +65,7 @@ apps/api
     types.ts
     videoCompression.ts
     videoDownload.ts
+    videoLibrary.ts
 ```
 
 - `tsconfig.json`
@@ -100,6 +101,10 @@ apps/api
   - Читает доступные video formats через `yt-dlp --dump-json`.
   - Скачивает выбранные formats в `runtime/downloads/`.
 
+- `src/videoLibrary.ts`
+  - Хранит добавленные из YouTube видео в таблице SQLite `youtube_videos`.
+  - Нормализует YouTube URL до canonical watch URL, дедуплицирует по `youtubeVideoId` и отдает список для CRM `/videos`.
+
 - `src/videoCompression.ts`
   - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
   - Пишет результат в `runtime/compressed/`.
@@ -116,6 +121,7 @@ apps/api
 ```txt
 apps/crm
   app/
+    videos/page.tsx
     globals.css
     layout.tsx
     page.tsx
@@ -135,6 +141,7 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - transcription history
+  - YouTube video backlog на странице `/videos`
   - удаление записей истории с подтверждением
   - копирование текста `Clean Transcript` из текущего результата и деталки истории
   - video format selection
@@ -153,13 +160,18 @@ apps/extension
       main.tsx
       popup-app.tsx
       style.css
+  src/
+    api-base-url.ts
+    youtube-video.ts
   wxt.config.ts
 ```
 
 - WXT + React + TypeScript Manifest V3 extension.
-- Popup использует `@transcribator/api-client`.
+- Popup использует `@transcribator/api-client` и содержит отдельную кнопку «Добавить видео» для сохранения текущего YouTube-ролика в backlog без запуска транскрибации.
 - Background service worker хранит defaults extension и последний YouTube URL.
 - YouTube content script использует Shadow DOM style isolation.
+- YouTube content script показывает кнопку «Добавить видео» на video/shorts/live страницах, проверяет `/videos/library/check` и добавляет видео через `/videos/library`.
+- `src/api-base-url.ts` держит дефолт `http://127.0.0.1:2001` и мигрирует старый локальный дефолт `3001`.
 - Remote hosted code не используется.
 
 ## Пакеты
@@ -267,6 +279,23 @@ CRM video URL
   -> POST /videos/download
   -> videoDownload.downloadVideo
   -> runtime/downloads/<safe_title-formatId>.<ext>
+```
+
+### YouTube video backlog
+
+```txt
+YouTube watch/shorts/live page
+  -> apps/extension content script Shadow DOM button
+  -> GET /videos/library/check?url=<canonical-youtube-url>
+  -> button state: Добавить или Добавлено
+  -> POST /videos/library
+  -> shared Zod validation
+  -> videoLibrary.addVideo
+  -> SQLite youtube_videos unique youtube_video_id
+  -> CRM /videos
+  -> packages/api-client getYouTubeVideos
+  -> GET /videos/library
+  -> list cards with title, channel, thumbnail, status and YouTube link
 ```
 
 ### Video compression

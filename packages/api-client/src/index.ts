@@ -9,6 +9,10 @@ import {
   historyScreenshotsRequestSchema,
   jobIdResponseSchema,
   updateHistoryEntryRequestSchema,
+  youtubeVideoAddResponseSchema,
+  youtubeVideoCheckResponseSchema,
+  youtubeVideoCreateRequestSchema,
+  youtubeVideoListResponseSchema,
   videoCompressionPresetSchema,
   videoDownloadResponseSchema,
   videoFormatsResponseSchema,
@@ -25,7 +29,11 @@ import {
   type UpdateHistoryEntryRequest,
   type VideoCompressionPreset,
   type VideoDownloadResponse,
-  type VideoFormatsResponse
+  type VideoFormatsResponse,
+  type YouTubeVideoAddResponse,
+  type YouTubeVideoCheckResponse,
+  type YouTubeVideoCreateRequest,
+  type YouTubeVideoListResponse
 } from '@transcribator/shared';
 
 export type FetchLike = typeof fetch;
@@ -203,6 +211,37 @@ export function createApiClient(options: ApiClientOptions = {}) {
           body: JSON.stringify({ url, formatId })
         },
         videoDownloadResponseSchema
+      ),
+
+    getYouTubeVideos: () =>
+      requestJson<YouTubeVideoListResponse>(
+        fetcher,
+        baseUrl,
+        '/videos/library',
+        {},
+        youtubeVideoListResponseSchema
+      ),
+
+    addYouTubeVideo: (input: YouTubeVideoCreateRequest) =>
+      requestJson<YouTubeVideoAddResponse>(
+        fetcher,
+        baseUrl,
+        '/videos/library',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(youtubeVideoCreateRequestSchema.parse(input))
+        },
+        youtubeVideoAddResponseSchema
+      ),
+
+    checkYouTubeVideo: (url: string) =>
+      requestJson<YouTubeVideoCheckResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/check?url=${encodeURIComponent(url)}`,
+        {},
+        youtubeVideoCheckResponseSchema
       ),
 
     compressVideo: (file: File, preset: VideoCompressionPreset = 'balanced') => {

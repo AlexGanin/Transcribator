@@ -13,7 +13,9 @@ import {
   urlTranscriptionRequestSchema,
   videoCompressionRequestSchema,
   videoDownloadRequestSchema,
-  videoFormatsRequestSchema
+  videoFormatsRequestSchema,
+  youtubeVideoCheckRequestSchema,
+  youtubeVideoCreateRequestSchema
 } from '@transcribator/shared';
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
 import { createJob, getJob, listHistory } from './jobs.js';
@@ -21,6 +23,7 @@ import { historyDetailsService } from './historyDetails.js';
 import { defaultTranscriptionStore, migrateHistoryJsonToSqlite } from './transcriptionStore.js';
 import { compressVideo, ensureCompressedDir } from './videoCompression.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
+import { defaultVideoLibraryStore } from './videoLibrary.js';
 import { createHttpError, isHttpError } from './errors.js';
 import { formatBytes, getMaxUploadSizeBytes } from './uploadLimit.js';
 import type { JobMetadata } from './types.js';
@@ -194,6 +197,32 @@ app.post('/videos/download', async (req: Request, res: Response, next: NextFunct
   try {
     const body = videoDownloadRequestSchema.parse(req.body || {});
     res.status(202).json(await downloadVideo(body.url, body.formatId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/videos/library', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ videos: defaultVideoLibraryStore.listVideos() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/videos/library/check', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const query = youtubeVideoCheckRequestSchema.parse(req.query || {});
+    res.json(defaultVideoLibraryStore.checkVideo(query.url));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/library', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = youtubeVideoCreateRequestSchema.parse(req.body || {});
+    res.status(201).json(defaultVideoLibraryStore.addVideo(body));
   } catch (error) {
     next(error);
   }

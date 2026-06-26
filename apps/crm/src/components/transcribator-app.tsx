@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  ExternalLink,
   FileAudio,
   FileText,
   FileVideo,
@@ -36,7 +37,8 @@ import {
   type UpdateHistoryEntryRequest,
   type VideoCompressionPreset,
   type VideoCompressionResult,
-  type VideoFormat
+  type VideoFormat,
+  type YouTubeVideo
 } from '@transcribator/shared';
 import {
   Badge,
@@ -197,6 +199,9 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const [videoStatus, setVideoStatus] = React.useState<RunStatus | 'loading' | 'downloading'>('idle');
   const [videoError, setVideoError] = React.useState('');
   const [downloadedVideoPath, setDownloadedVideoPath] = React.useState('');
+  const [youtubeVideos, setYoutubeVideos] = React.useState<YouTubeVideo[]>([]);
+  const [youtubeVideosLoading, setYoutubeVideosLoading] = React.useState(false);
+  const [youtubeVideosError, setYoutubeVideosError] = React.useState('');
   const [compressionFile, setCompressionFile] = React.useState<File | null>(null);
   const [compressionPreset, setCompressionPreset] = React.useState<VideoCompressionPreset>('balanced');
   const [compressionStatus, setCompressionStatus] = React.useState<RunStatus>('idle');
@@ -244,6 +249,12 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
 
     return () => window.clearInterval(timer);
   }, [status]);
+
+  React.useEffect(() => {
+    if (view === 'videos') {
+      void loadYouTubeVideos({ showLoading: true, showError: true });
+    }
+  }, [view]);
 
   React.useEffect(() => {
     if (compressionStatus !== 'running') return undefined;
@@ -482,6 +493,29 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
     } finally {
       if (options.showLoading) {
         setHistoryLoading(false);
+      }
+    }
+  }
+
+  async function loadYouTubeVideos(options: { showLoading?: boolean; showError?: boolean } = {}) {
+    if (options.showLoading) {
+      setYoutubeVideosLoading(true);
+    }
+    if (options.showError) {
+      setYoutubeVideosError('');
+    }
+
+    try {
+      const response = await api.getYouTubeVideos();
+      setYoutubeVideos(response.videos || []);
+    } catch (caught) {
+      setYoutubeVideos([]);
+      if (options.showError) {
+        setYoutubeVideosError(errorMessage(caught, 'Не удалось загрузить видео.'));
+      }
+    } finally {
+      if (options.showLoading) {
+        setYoutubeVideosLoading(false);
       }
     }
   }
@@ -979,6 +1013,70 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
             </Link>
           ))}
         </nav>
+
+        {view === 'videos' && (
+          <section className="grid gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold">Видео</h2>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-fit"
+                onClick={() => void loadYouTubeVideos({ showLoading: true, showError: true })}
+                disabled={youtubeVideosLoading}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Обновить
+              </Button>
+            </div>
+
+            {youtubeVideosError && (
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{youtubeVideosError}</p>
+            )}
+
+            {youtubeVideosLoading && (
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">Загружаю...</p>
+            )}
+
+            {!youtubeVideosLoading && youtubeVideos.length === 0 && !youtubeVideosError && (
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">Видео пока не добавлены.</p>
+            )}
+
+            {youtubeVideos.length > 0 && (
+              <section className="grid gap-3">
+                {youtubeVideos.map((video) => (
+                  <article key={video.id} className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-[160px_1fr]">
+                    {video.thumbnailUrl ? (
+                      <img
+                        src={video.thumbnailUrl}
+                        alt=""
+                        className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
+                      />
+                    ) : (
+                      <div className="aspect-video w-full rounded-md border border-neutral-200 bg-neutral-100" />
+                    )}
+                    <div className="grid gap-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <h3 className="text-base font-semibold break-words">{video.title || video.url}</h3>
+                        <Badge variant="secondary">{formatYouTubeVideoStatus(video.status)}</Badge>
+                      </div>
+                      {video.channelTitle && <p className="text-sm text-neutral-600">{video.channelTitle}</p>}
+                      <p className="text-xs text-neutral-500">Добавлено: {formatHistoryDate(video.createdAt)}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild variant="secondary" className="w-fit">
+                          <a href={video.url} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-4 w-4" />
+                            Открыть
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            )}
+          </section>
+        )}
 
         {view === 'transcribe' && (
             <section className="grid gap-6">
@@ -1957,6 +2055,15 @@ function formatElapsed(totalSeconds: number) {
 function formatHistoryDate(value: number) {
   if (!Number.isFinite(value) || value <= 0) return 'Нет данных';
   return new Date(value).toLocaleString('ru-RU');
+}
+
+function formatYouTubeVideoStatus(status: YouTubeVideo['status']) {
+  return {
+    added: 'Добавлено',
+    processing: 'В работе',
+    done: 'Готово',
+    error: 'Ошибка'
+  }[status];
 }
 
 function previewText(value: string, maxLength = 220) {

@@ -2,8 +2,10 @@ import * as React from 'react';
 import { browser } from 'wxt/browser';
 import { ApiClientError, createApiClient } from '@transcribator/api-client';
 import type { TranscriptionEngine } from '@transcribator/shared';
+import { DEFAULT_API_BASE_URL, normalizeApiBaseUrl } from '../../src/api-base-url.js';
+import { ADD_VIDEO_BUTTON_LABEL, buildYouTubeVideoCreateInput } from '../../src/video-library-action.js';
 
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:2001';
+const INITIAL_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 const ENGINES: Array<{ value: TranscriptionEngine; label: string }> = [
   { value: 'mlx-whisper', label: 'MLX Whisper' },
   { value: 'openai-whisper', label: 'OpenAI Whisper' },
@@ -11,7 +13,7 @@ const ENGINES: Array<{ value: TranscriptionEngine; label: string }> = [
 ];
 
 export function PopupApp() {
-  const [apiBaseUrl, setApiBaseUrl] = React.useState(DEFAULT_API_BASE_URL);
+  const [apiBaseUrl, setApiBaseUrl] = React.useState(INITIAL_API_BASE_URL);
   const [url, setUrl] = React.useState('');
   const [engine, setEngine] = React.useState<TranscriptionEngine>('mlx-whisper');
   const [status, setStatus] = React.useState('Idle');
@@ -19,8 +21,10 @@ export function PopupApp() {
 
   React.useEffect(() => {
     void browser.storage.local.get(['transcribatorApiBaseUrl', 'transcribatorLastYouTubeUrl']).then((stored) => {
-      if (typeof stored.transcribatorApiBaseUrl === 'string') {
-        setApiBaseUrl(stored.transcribatorApiBaseUrl);
+      const storedApiBaseUrl = normalizeApiBaseUrl(stored.transcribatorApiBaseUrl, INITIAL_API_BASE_URL);
+      setApiBaseUrl(storedApiBaseUrl);
+      if (stored.transcribatorApiBaseUrl !== storedApiBaseUrl) {
+        void browser.storage.local.set({ transcribatorApiBaseUrl: storedApiBaseUrl });
       }
       if (typeof stored.transcribatorLastYouTubeUrl === 'string') {
         setUrl(stored.transcribatorLastYouTubeUrl);
@@ -33,6 +37,30 @@ export function PopupApp() {
     if (tab?.url) {
       setUrl(tab.url);
       await browser.storage.local.set({ transcribatorLastYouTubeUrl: tab.url });
+    }
+  }
+
+  async function addVideoToLibrary() {
+    setStatus('Добавляю видео...');
+
+    try {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      const fromCurrentTab = tab?.url
+        ? buildYouTubeVideoCreateInput({ url: tab.url, title: tab.title })
+        : null;
+      const input = fromCurrentTab || buildYouTubeVideoCreateInput({ url });
+
+      if (!input) {
+        setStatus('Откройте YouTube-видео или вставьте ссылку на него.');
+        return;
+      }
+
+      setUrl(input.url);
+      await browser.storage.local.set({ transcribatorLastYouTubeUrl: input.url });
+      const response = await api.addYouTubeVideo(input);
+      setStatus(response.alreadyAdded ? 'Видео уже добавлено' : 'Видео добавлено');
+    } catch (caught) {
+      setStatus(errorMessage(caught, 'Не удалось добавить видео'));
     }
   }
 
@@ -97,6 +125,9 @@ export function PopupApp() {
         <div className="actions">
           <button type="button" className="secondary" onClick={useCurrentTab}>
             Current tab
+          </button>
+          <button type="button" onClick={addVideoToLibrary}>
+            {ADD_VIDEO_BUTTON_LABEL}
           </button>
           <button type="submit" disabled={!url.trim()}>
             Transcribe

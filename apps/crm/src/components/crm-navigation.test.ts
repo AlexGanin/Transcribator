@@ -9,6 +9,7 @@ describe('crm navigation', () => {
   it('keeps history as the last top-level menu item with page URLs', () => {
     assert.deepEqual(crmNavigationItems.map((item) => [item.id, item.href, item.label]), [
       ['transcribe', '/', 'Транскрибатор'],
+      ['videos', '/videos', 'Видео'],
       ['download', '/download', 'Скачать видео'],
       ['compress', '/compress', 'Сжать видео'],
       ['history', '/history', 'История']

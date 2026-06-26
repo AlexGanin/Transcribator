@@ -11,7 +11,7 @@
 - `packages/api-client`: fetch-клиент, который используют CRM и extension.
 - `packages/ui`: shadcn-style React UI primitives на Tailwind и Radix, плюс Storybook UI Kit.
 
-Express API отвечает за всю транскрибацию и видео-логику: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, Server-Sent Events, историю и скачивания.
+Express API отвечает за всю транскрибацию и видео-логику: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, Server-Sent Events, историю, YouTube video backlog и скачивания.
 
 ## Системные требования
 
@@ -60,7 +60,7 @@ http://127.0.0.1:2001
 
 Runtime-файлы пишутся в корневую папку `runtime/`:
 
-- `runtime/transcribator.sqlite`: основной SQLite-индекс транскрибаций и скриншотов
+- `runtime/transcribator.sqlite`: основной SQLite-индекс транскрибаций, скриншотов и добавленных YouTube-видео
 - `runtime/source/`: копии загруженных исходных медиа
 - `runtime/tmp/`: uploads, WAV-файлы и папки вывода Whisper
 - `runtime/output/`: legacy `history.json` для одноразовой миграции старых записей
@@ -145,6 +145,9 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `GET` | `/jobs/:id/events` | Нейтральный SSE-поток прогресса job |
 | `POST` | `/videos/formats` | Получить доступные форматы видео |
 | `POST` | `/videos/download` | Скачать выбранный формат в `runtime/downloads/` |
+| `GET` | `/videos/library` | Получить добавленные из YouTube видео для CRM `/videos` |
+| `GET` | `/videos/library/check` | Проверить, добавлено ли YouTube-видео по URL |
+| `POST` | `/videos/library` | Добавить YouTube-видео из расширения в CRM |
 | `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 
 Для `/transcribe/url` и `/transcribe/file` можно передать `screenshotsEnabled=true` и `screenshotIntervalSeconds=30`.

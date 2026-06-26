@@ -119,7 +119,7 @@ pipx install mlx-whisper
 
 | Путь | Кто использует | Что появляется внутри |
 | --- | --- | --- |
-| `runtime/transcribator.sqlite` | `apps/api/src/transcriptionStore.ts`, `apps/api/src/jobs.ts`, `apps/api/src/historyDetails.ts` | Единый источник правды для истории транскрибаций и состояния скриншотов. Таблица `transcriptions` хранит `rawText`, `cleanText`, будущие `formattedText`/`summary`, статусы, source/engine и `markdownPath`. Таблица `screenshots` хранит имя файла, timestamp, статус `active`/`trash` и текущий путь. |
+| `runtime/transcribator.sqlite` | `apps/api/src/transcriptionStore.ts`, `apps/api/src/jobs.ts`, `apps/api/src/historyDetails.ts`, `apps/api/src/videoLibrary.ts` | Единый источник правды для истории транскрибаций, состояния скриншотов и YouTube video backlog. Таблица `transcriptions` хранит `rawText`, `cleanText`, будущие `formattedText`/`summary`, статусы, source/engine и `markdownPath`. Таблица `screenshots` хранит имя файла, timestamp, статус `active`/`trash` и текущий путь. Таблица `youtube_videos` хранит добавленные из расширения ролики и дедуплицирует их по `youtube_video_id`. |
 | `runtime/source/` | `apps/api/src/pipeline.ts` | Копии файлов, которые пользователь отправил на транскрибацию через upload. API сохраняет их под безопасным именем файла, чтобы исходник можно было повторно обработать или сверить с результатом. |
 | `runtime/tmp/` | `multer`, `apps/api/src/index.ts`, `apps/api/src/pipeline.ts` | Временные upload-файлы, WAV-файлы после конвертации через `ffmpeg`, а также рабочие папки CLI-движков Whisper. Эти данные нужны только во время обработки и могут очищаться после завершения задач. |
 | `runtime/output/` | `apps/api/src/transcriptionStore.ts` migration | Legacy-каталог. Новые итоговые `.txt`-транскрипты больше не создаются. Старый `history.json` может быть прочитан при старте API и импортирован в SQLite, после чего SQLite становится источником истории. |
@@ -152,6 +152,9 @@ pipx install mlx-whisper
 | `GET` | `/jobs/:id/events` | Нейтральный Server-Sent Events stream для job progress |
 | `POST` | `/videos/formats` | Вернуть доступные video download formats |
 | `POST` | `/videos/download` | Скачать выбранный video format в `runtime/downloads/` |
+| `GET` | `/videos/library` | Вернуть YouTube video backlog для CRM `/videos` |
+| `GET` | `/videos/library/check` | Проверить по URL, добавлено ли YouTube-видео |
+| `POST` | `/videos/library` | Добавить YouTube-видео из Chrome extension в backlog |
 | `POST` | `/videos/compress` | Загрузить локальный video file и запустить compression job в `runtime/compressed/` |
 
 Request и response schemas лежат в `packages/shared`.
