@@ -103,7 +103,7 @@ apps/api
 - `src/videoCompression.ts`
   - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
   - Пишет результат в `runtime/compressed/`.
-  - Использует H.264 + AAC presets и отдает реальный progress по длительности видео.
+  - Использует Apple VideoToolbox HEVC/H.265 + AAC presets и отдает реальный progress по длительности видео.
 
 - `src/errors.ts`
   - Содержит `HttpError` с `statusCode` и guard для error middleware.
@@ -279,8 +279,8 @@ CRM local video file
   -> multer temp upload
   -> jobs.createJob with persistHistory: false
   -> videoCompression.compressVideo
-  -> ffprobe duration metadata
-  -> ffmpeg H.264 + AAC compression
+  -> ffprobe duration and dimension metadata
+  -> ffmpeg Apple VideoToolbox HEVC/H.265 + AAC compression
   -> runtime/compressed/<safe_original_name-preset-compressed-timestamp>.mp4
   -> SSE progress/done events через /jobs/:id/events
   -> CRM progress, output path и size savings

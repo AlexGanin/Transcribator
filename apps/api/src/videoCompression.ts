@@ -13,7 +13,7 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.VIDEO_COMPRESS_TIMEOUT_MS || 60 * 
 export interface CompressionPresetConfig {
   id: VideoCompressionPreset;
   label: string;
-  crf: number;
+  videoBitrate: string;
   audioBitrate: string;
 }
 
@@ -22,24 +22,30 @@ export interface VideoCompressionOptions {
   onProgress?: ProgressHandler | undefined;
 }
 
+interface VideoProbeMetadata {
+  durationSeconds: number;
+  width?: number | undefined;
+  height?: number | undefined;
+}
+
 const COMPRESSION_PRESETS: Record<VideoCompressionPreset, CompressionPresetConfig> = {
   high: {
     id: 'high',
     label: 'Высокое качество',
-    crf: 20,
-    audioBitrate: '192k'
+    videoBitrate: '4500k',
+    audioBitrate: '160k'
   },
   balanced: {
     id: 'balanced',
     label: 'Баланс',
-    crf: 23,
-    audioBitrate: '160k'
+    videoBitrate: '3500k',
+    audioBitrate: '128k'
   },
   small: {
     id: 'small',
     label: 'Минимальный размер',
-    crf: 28,
-    audioBitrate: '128k'
+    videoBitrate: '2500k',
+    audioBitrate: '96k'
   }
 };
 
@@ -67,11 +73,11 @@ export async function compressVideo(
     await assertCommandAvailable(getFfprobeCommand(), 'ffprobe');
 
     emitProgress(options, 'probe', 5, 'Читаю параметры видео');
-    const durationSeconds = await probeDurationSeconds(file.path);
+    const metadata = await probeVideoMetadata(file.path);
     emitProgress(options, 'probe', 100, 'Параметры видео получены');
 
     await rm(outputPath, { force: true });
-    await runCompression(file.path, outputPath, preset, durationSeconds, options);
+    await runCompression(file.path, outputPath, preset, metadata, options);
 
     const compressedSizeBytes = (await stat(outputPath)).size;
     const savedBytes = originalSizeBytes - compressedSizeBytes;
@@ -82,7 +88,7 @@ export async function compressVideo(
       compressedSizeBytes,
       savedBytes,
       savingsRatio: originalSizeBytes > 0 ? savedBytes / originalSizeBytes : 0,
-      durationSeconds,
+      durationSeconds: metadata.durationSeconds,
       preset: preset.id
     };
   } catch (error) {
@@ -133,34 +139,45 @@ export function parseFfmpegProgress(line: string, durationSeconds: number): numb
   return Math.max(0, Math.min(100, Math.round((seconds / durationSeconds) * 100)));
 }
 
-async function probeDurationSeconds(inputPath: string): Promise<number> {
+async function probeVideoMetadata(inputPath: string): Promise<VideoProbeMetadata> {
   const result = await runCommand(getFfprobeCommand(), [
     '-v',
     'error',
+    '-select_streams',
+    'v:0',
     '-show_entries',
-    'format=duration',
+    'stream=width,height:format=duration',
     '-of',
-    'default=noprint_wrappers=1:nokey=1',
+    'json',
     inputPath
   ]);
-  const duration = Number(result.stdout.trim());
+  const parsed = JSON.parse(result.stdout) as {
+    format?: { duration?: string | number | undefined } | undefined;
+    streams?: Array<{ width?: number | string | undefined; height?: number | string | undefined }> | undefined;
+  };
+  const duration = Number(parsed.format?.duration);
 
   if (!Number.isFinite(duration) || duration <= 0) {
     throw createHttpError(400, 'Не удалось определить длительность видео. Проверьте, что файл является видео.');
   }
 
-  return duration;
+  const videoStream = parsed.streams?.[0];
+  const width = Number(videoStream?.width);
+  const height = Number(videoStream?.height);
+
+  return {
+    durationSeconds: duration,
+    ...(Number.isFinite(width) && width > 0 ? { width } : {}),
+    ...(Number.isFinite(height) && height > 0 ? { height } : {})
+  };
 }
 
-function runCompression(
+export function buildFfmpegCompressionArgs(
   inputPath: string,
   outputPath: string,
   preset: CompressionPresetConfig,
-  durationSeconds: number,
-  options: VideoCompressionOptions
-): Promise<void> {
-  emitProgress(options, 'compress', 1, 'Сжимаю видео');
-
+  metadata?: Pick<VideoProbeMetadata, 'width' | 'height'> | undefined
+): string[] {
   const args = [
     '-y',
     '-hide_banner',
@@ -171,15 +188,26 @@ function runCompression(
     '-map',
     '0:v:0',
     '-map',
-    '0:a?',
+    '0:a?'
+  ];
+
+  if (shouldScaleToEvenDimensions(metadata)) {
+    args.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2');
+  }
+
+  args.push(
     '-c:v',
-    'libx264',
-    '-preset',
-    'medium',
-    '-crf',
-    String(preset.crf),
-    '-vf',
-    'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+    'hevc_videotoolbox',
+    '-profile:v',
+    'main',
+    '-b:v',
+    preset.videoBitrate,
+    '-tag:v',
+    'hvc1',
+    '-allow_sw',
+    '0',
+    '-prio_speed',
+    '1',
     '-pix_fmt',
     'yuv420p',
     '-c:a',
@@ -192,7 +220,31 @@ function runCompression(
     'pipe:2',
     '-nostats',
     outputPath
-  ];
+  );
+
+  return args;
+}
+
+function shouldScaleToEvenDimensions(metadata?: Pick<VideoProbeMetadata, 'width' | 'height'> | undefined): boolean {
+  const width = metadata?.width;
+  const height = metadata?.height;
+
+  if (typeof width !== 'number' || typeof height !== 'number' || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return true;
+  }
+
+  return width % 2 !== 0 || height % 2 !== 0;
+}
+
+function runCompression(
+  inputPath: string,
+  outputPath: string,
+  preset: CompressionPresetConfig,
+  metadata: VideoProbeMetadata,
+  options: VideoCompressionOptions
+): Promise<void> {
+  emitProgress(options, 'compress', 1, 'Сжимаю видео через VideoToolbox');
+  const args = buildFfmpegCompressionArgs(inputPath, outputPath, preset, metadata);
 
   return new Promise<void>((resolve, reject) => {
     const child = spawn(getFfmpegCommand(), args, {
@@ -215,11 +267,11 @@ function runCompression(
       for (const line of lines) {
         if (!line) continue;
         stderrLines.push(line);
-        const parsedProgress = parseFfmpegProgress(line, durationSeconds);
+        const parsedProgress = parseFfmpegProgress(line, metadata.durationSeconds);
 
         if (parsedProgress !== null) {
           lastProgress = Math.max(lastProgress, Math.min(99, parsedProgress));
-          emitProgress(options, 'compress', lastProgress, 'Сжимаю видео');
+          emitProgress(options, 'compress', lastProgress, 'Сжимаю видео через VideoToolbox');
         }
       }
     });
@@ -237,7 +289,7 @@ function runCompression(
         return;
       }
 
-      emitProgress(options, 'compress', 100, 'Видео сжато');
+      emitProgress(options, 'compress', 100, 'Видео сжато через VideoToolbox');
       resolve();
     });
   });

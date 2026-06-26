@@ -103,6 +103,8 @@ Storybook живет внутри `packages/ui`; отдельное прилож
 - `ffmpeg`
 - один transcription engine command или OpenAI API credentials
 
+Для local video compression нужен `ffmpeg` с энкодером `hevc_videotoolbox`; API использует Apple VideoToolbox HEVC/H.265, запрещает software fallback для видеоэнкодера и пишет MP4 с `hvc1` tag. Текущие bitrate-пресеты рассчитаны на MacBook screen recordings: `4500k` для высокого качества, `3500k` для баланса и `2500k` для минимального размера.
+
 Обычные команды установки на macOS:
 
 ```sh
@@ -123,7 +125,7 @@ pipx install mlx-whisper
 | `runtime/output/` | `apps/api/src/transcriptionStore.ts` migration | Legacy-каталог. Новые итоговые `.txt`-транскрипты больше не создаются. Старый `history.json` может быть прочитан при старте API и импортирован в SQLite, после чего SQLite становится источником истории. |
 | `runtime/artifacts/` | `apps/api/src/obsidianNotes.ts`, `apps/api/src/markdownArtifacts.ts`, `apps/api/src/historyDetails.ts` | Файловые артефакты записей истории. Для транскрибации со скриншотами создается `runtime/artifacts/<transcription-id>/screenshots/*.jpg`; удаление переносит файлы в `runtime/artifacts/<transcription-id>/trash/screenshots/*.jpg`. Кнопка «Создать Markdown» пишет `runtime/artifacts/<transcription-id>/transcript.md` из данных SQLite. |
 | `runtime/downloads/` | `apps/api/src/videoDownload.ts` | Видео, скачанные через вкладку скачивания YouTube. Имя файла формируется из названия ролика и выбранного format id. |
-| `runtime/compressed/` | `apps/api/src/videoCompression.ts` | Сжатые локальные видео из вкладки CRM «Сжать видео». API пишет сюда MP4-файлы H.264 + AAC с безопасным именем, выбранным пресетом и timestamp. |
+| `runtime/compressed/` | `apps/api/src/videoCompression.ts` | Сжатые локальные видео из вкладки CRM «Сжать видео». API пишет сюда MP4-файлы Apple VideoToolbox HEVC/H.265 + AAC с безопасным именем, выбранным пресетом и timestamp. |
 | `runtime/obsidian/` | legacy helpers/tests | Legacy Obsidian-ready vault folders старых записей. Новые транскрибации больше не создают здесь `transcript.md`/`metadata.json`; Markdown создается отдельно в `runtime/artifacts/<transcription-id>/`. |
 
 Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/artifacts/`, `runtime/downloads/`, `runtime/compressed/` и `runtime/obsidian/` коммитятся только `.gitkeep` файлы. `runtime/transcribator.sqlite`, реальные медиа, временные файлы, `history.json`, Markdown, `.jpg`, скачанные и сжатые видео, legacy Obsidian `.md`/`metadata.json`, а также системные файлы вроде `.DS_Store` должны оставаться локальными.

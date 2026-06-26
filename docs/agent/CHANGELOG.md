@@ -2,6 +2,12 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-24
+
+- Изменено: локальное сжатие видео переведено с CPU `libx264`/CRF на Apple VideoToolbox `hevc_videotoolbox` с MP4 `hvc1`, запретом software fallback (`-allow_sw 0`), ускоренным режимом `-prio_speed 1` и bitrate-пресетами для MacBook screen recordings: `4500k`/`3500k`/`2500k`.
+- Проверено: `node --test --import tsx src/videoCompression.test.ts`, `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, smoke `compressVideo` с `hevc_videotoolbox` вне sandbox, `ffprobe` выходного файла (`codec_name=hevc`, `codec_tag_string=hvc1`, balanced video bitrate около `3.6 Mbps`).
+- Документация: обновлены `README.md`, `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-23
 
 - Изменено: локальные порты Transcribator перенесены в диапазон 2000: CRM `127.0.0.1:2000`, API `127.0.0.1:2001`, Storybook `127.0.0.1:2002`; клиентские дефолты теперь используют `127.0.0.1`, чтобы избежать IPv6-конфликтов `localhost`; добавлен `.nvmrc` для Node `24.17.0`.
