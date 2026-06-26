@@ -103,7 +103,8 @@ apps/api
 
 - `src/videoLibrary.ts`
   - Хранит добавленные из YouTube видео в таблице SQLite `youtube_videos`.
-  - Нормализует YouTube URL до canonical watch URL, дедуплицирует по `youtubeVideoId` и отдает список для CRM `/videos`.
+  - Нормализует YouTube URL до canonical watch URL, дедуплицирует по `youtubeVideoId`, отдает список для CRM `/videos` и детальную карточку `/videos/[id]`.
+  - Для детальной карточки кэширует metadata из `yt-dlp --dump-json`: описание, длительность, даты, статистику, канал, теги, категории, доступность и форматы.
 
 - `src/videoCompression.ts`
   - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
@@ -121,6 +122,7 @@ apps/api
 ```txt
 apps/crm
   app/
+    videos/[id]/page.tsx
     videos/page.tsx
     globals.css
     layout.tsx
@@ -141,7 +143,7 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - transcription history
-  - YouTube video backlog на странице `/videos`
+  - YouTube video backlog на странице `/videos` и детальная карточка `/videos/[id]`
   - удаление записей истории с подтверждением
   - копирование текста `Clean Transcript` из текущего результата и деталки истории
   - video format selection
@@ -296,6 +298,13 @@ YouTube watch/shorts/live page
   -> packages/api-client getYouTubeVideos
   -> GET /videos/library
   -> list cards with title, channel, thumbnail, status and YouTube link
+  -> CRM /videos/[id]
+  -> GET /videos/library/:id
+  -> videoLibrary.getVideoDetail
+  -> fetch missing metadata through yt-dlp --dump-json
+  -> cache metadata fields and raw metadata JSON in SQLite
+  -> render title, channel, duration, upload date, stats, tags, categories, description and formats
+  -> POST /videos/library/:id/metadata refreshes cached metadata on demand
 ```
 
 ### Video compression

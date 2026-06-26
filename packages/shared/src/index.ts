@@ -218,8 +218,30 @@ export const youtubeVideoSchema = z.object({
   youtubeVideoId: z.string(),
   url: z.string().url(),
   title: z.string().default(''),
+  description: z.string().default(''),
   channelTitle: z.string().default(''),
+  channelId: z.string().default(''),
+  channelUrl: z.string().default(''),
+  uploader: z.string().default(''),
+  uploaderId: z.string().default(''),
+  uploaderUrl: z.string().default(''),
   thumbnailUrl: z.string().default(''),
+  durationSeconds: z.number().nonnegative().nullable().default(null),
+  durationLabel: z.string().default(''),
+  uploadDate: z.string().default(''),
+  timestamp: z.number().nullable().default(null),
+  viewCount: z.number().nonnegative().nullable().default(null),
+  likeCount: z.number().nonnegative().nullable().default(null),
+  commentCount: z.number().nonnegative().nullable().default(null),
+  categories: z.array(z.string()).default([]),
+  tags: z.array(z.string()).default([]),
+  language: z.string().default(''),
+  availability: z.string().default(''),
+  liveStatus: z.string().default(''),
+  ageLimit: z.number().nonnegative().nullable().default(null),
+  webpageUrl: z.string().default(''),
+  formats: z.array(videoFormatSchema).default([]),
+  metadataFetchedAt: z.number().nullable().default(null),
   status: youtubeVideoStatusSchema,
   createdAt: z.number(),
   updatedAt: z.number()
@@ -248,6 +270,11 @@ export const youtubeVideoCheckRequestSchema = z.object({
 export const youtubeVideoCheckResponseSchema = z.object({
   added: z.boolean(),
   video: youtubeVideoSchema.optional()
+});
+
+export const youtubeVideoDetailResponseSchema = z.object({
+  video: youtubeVideoSchema,
+  metadataError: z.string().optional()
 });
 
 export const videoCompressionRequestSchema = z.object({
@@ -297,6 +324,7 @@ export type YouTubeVideoListResponse = z.infer<typeof youtubeVideoListResponseSc
 export type YouTubeVideoAddResponse = z.infer<typeof youtubeVideoAddResponseSchema>;
 export type YouTubeVideoCheckRequest = z.infer<typeof youtubeVideoCheckRequestSchema>;
 export type YouTubeVideoCheckResponse = z.infer<typeof youtubeVideoCheckResponseSchema>;
+export type YouTubeVideoDetailResponse = z.infer<typeof youtubeVideoDetailResponseSchema>;
 export type VideoCompressionPreset = z.infer<typeof videoCompressionPresetSchema>;
 export type VideoCompressionRequest = z.infer<typeof videoCompressionRequestSchema>;
 export type VideoCompressionResult = z.infer<typeof videoCompressionResultSchema>;

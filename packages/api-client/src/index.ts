@@ -12,6 +12,7 @@ import {
   youtubeVideoAddResponseSchema,
   youtubeVideoCheckResponseSchema,
   youtubeVideoCreateRequestSchema,
+  youtubeVideoDetailResponseSchema,
   youtubeVideoListResponseSchema,
   videoCompressionPresetSchema,
   videoDownloadResponseSchema,
@@ -33,6 +34,7 @@ import {
   type YouTubeVideoAddResponse,
   type YouTubeVideoCheckResponse,
   type YouTubeVideoCreateRequest,
+  type YouTubeVideoDetailResponse,
   type YouTubeVideoListResponse
 } from '@transcribator/shared';
 
@@ -242,6 +244,24 @@ export function createApiClient(options: ApiClientOptions = {}) {
         `/videos/library/check?url=${encodeURIComponent(url)}`,
         {},
         youtubeVideoCheckResponseSchema
+      ),
+
+    getYouTubeVideo: (id: string) =>
+      requestJson<YouTubeVideoDetailResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}`,
+        {},
+        youtubeVideoDetailResponseSchema
+      ),
+
+    refreshYouTubeVideoMetadata: (id: string) =>
+      requestJson<YouTubeVideoDetailResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/metadata`,
+        { method: 'POST' },
+        youtubeVideoDetailResponseSchema
       ),
 
     compressVideo: (file: File, preset: VideoCompressionPreset = 'balanced') => {

@@ -219,6 +219,22 @@ app.get('/videos/library/check', async (req: Request, res: Response, next: NextF
   }
 });
 
+app.get('/videos/library/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(await defaultVideoLibraryStore.getVideoDetail(String(req.params.id || '')));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/library/:id/metadata', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(await defaultVideoLibraryStore.getVideoDetail(String(req.params.id || ''), { refresh: true }));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/videos/library', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = youtubeVideoCreateRequestSchema.parse(req.body || {});

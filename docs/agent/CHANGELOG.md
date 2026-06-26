@@ -2,6 +2,13 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-27
+
+- Добавлено: детальная страница CRM `/videos/[id]` для добавленных YouTube-видео с кнопкой «Назад», обновлением metadata, описанием, длительностью, датами, статистикой, каналом, тегами, категориями и таблицей форматов.
+- Изменено: API `GET /videos/library/:id` и `POST /videos/library/:id/metadata` кэшируют и обновляют `yt-dlp --dump-json` metadata в SQLite `youtube_videos`; `packages/shared` и `packages/api-client` получили соответствующие контракты.
+- Проверено: точечные `node --test` для `apps/api/src/videoLibrary.test.ts`, `packages/api-client/src/index.test.ts`, `apps/crm/src/components/crm-navigation.test.ts`; `pnpm --filter @transcribator/shared check`, `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, `pnpm --filter @transcribator/api-client check`, `pnpm --filter @transcribator/crm check`, `git diff --check`.
+- Документация: обновлены `README.md`, `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-26
 
 - Добавлено: YouTube video backlog: Chrome extension показывает кнопку «Добавить» на страницах YouTube, API сохраняет ролики в SQLite `youtube_videos`, CRM получила страницу `/videos`, а `packages/api-client` и `packages/shared` получили контракты `/videos/library`.

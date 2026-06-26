@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  buildVideoDetailPath,
   buildHistoryDetailPath,
   crmNavigationItems
 } from './crm-navigation.js';
@@ -18,5 +19,9 @@ describe('crm navigation', () => {
 
   it('builds stable history detail URLs from entry ids', () => {
     assert.equal(buildHistoryDetailPath('abc 123'), '/history/abc%20123');
+  });
+
+  it('builds stable video detail URLs from library ids', () => {
+    assert.equal(buildVideoDetailPath('video id'), '/videos/video%20id');
   });
 });

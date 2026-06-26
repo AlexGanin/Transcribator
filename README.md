@@ -147,6 +147,8 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `POST` | `/videos/download` | Скачать выбранный формат в `runtime/downloads/` |
 | `GET` | `/videos/library` | Получить добавленные из YouTube видео для CRM `/videos` |
 | `GET` | `/videos/library/check` | Проверить, добавлено ли YouTube-видео по URL |
+| `GET` | `/videos/library/:id` | Получить детальную карточку видео и кэшированные `yt-dlp` metadata |
+| `POST` | `/videos/library/:id/metadata` | Обновить metadata добавленного YouTube-видео через `yt-dlp` |
 | `POST` | `/videos/library` | Добавить YouTube-видео из расширения в CRM |
 | `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 

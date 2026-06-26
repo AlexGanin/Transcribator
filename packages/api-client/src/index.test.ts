@@ -73,4 +73,78 @@ describe('api client defaults', () => {
       'http://127.0.0.1:2001/videos/library/check?url=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ'
     ]);
   });
+
+  it('loads YouTube video details by CRM library id', async () => {
+    const requestedUrls: string[] = [];
+    const fetchImpl: FetchLike = async (input) => {
+      requestedUrls.push(String(input));
+      return new Response(JSON.stringify({
+        video: {
+          id: 'video-id',
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          title: 'Видео',
+          description: 'Описание',
+          channelTitle: 'Канал',
+          channelId: 'channel-id',
+          channelUrl: 'https://www.youtube.com/channel/channel-id',
+          uploader: 'Автор',
+          uploaderId: 'uploader-id',
+          uploaderUrl: 'https://www.youtube.com/@author',
+          thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+          durationSeconds: 120,
+          durationLabel: '2:00',
+          uploadDate: '20260610',
+          timestamp: 1781059200,
+          viewCount: 1000,
+          likeCount: 50,
+          commentCount: 4,
+          categories: ['Education'],
+          tags: ['crm'],
+          language: 'ru',
+          availability: 'public',
+          liveStatus: 'not_live',
+          ageLimit: 0,
+          webpageUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          formats: [],
+          metadataFetchedAt: 123456,
+          status: 'added',
+          createdAt: 1,
+          updatedAt: 2
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    const result = await createApiClient({ fetchImpl }).getYouTubeVideo('video-id');
+
+    assert.equal(result.video.durationSeconds, 120);
+    assert.deepEqual(requestedUrls, ['http://127.0.0.1:2001/videos/library/video-id']);
+  });
+
+  it('refreshes YouTube video metadata by CRM library id', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: FetchLike = async (input, init = {}) => {
+      requests.push({ url: String(input), init });
+      return new Response(JSON.stringify({
+        video: {
+          id: 'video-id',
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          title: 'Видео',
+          status: 'added',
+          createdAt: 1,
+          updatedAt: 2
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    await createApiClient({ fetchImpl }).refreshYouTubeVideoMetadata('video-id');
+
+    assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id/metadata');
+    assert.equal(requests[0]?.init.method, 'POST');
+  });
 });

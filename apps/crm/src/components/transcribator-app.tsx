@@ -59,6 +59,7 @@ import {
 } from '@transcribator/ui';
 import {
   buildHistoryDetailPath,
+  buildVideoDetailPath,
   crmNavigationItems,
   type AppView
 } from './crm-navigation';
@@ -158,9 +159,10 @@ interface LastLightboxTrash {
 interface TranscribatorAppProps {
   view?: AppView;
   historyEntryId?: string;
+  videoId?: string;
 }
 
-export function TranscribatorApp({ view = 'transcribe', historyEntryId }: TranscribatorAppProps) {
+export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId }: TranscribatorAppProps) {
   const router = useRouter();
   const api = React.useMemo(() => createApiClient({ baseUrl: API_BASE_URL }), []);
   const [sourceMode, setSourceMode] = React.useState<SourceMode>('url');
@@ -202,6 +204,11 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
   const [youtubeVideos, setYoutubeVideos] = React.useState<YouTubeVideo[]>([]);
   const [youtubeVideosLoading, setYoutubeVideosLoading] = React.useState(false);
   const [youtubeVideosError, setYoutubeVideosError] = React.useState('');
+  const [youtubeVideoDetail, setYoutubeVideoDetail] = React.useState<YouTubeVideo | null>(null);
+  const [youtubeVideoDetailLoading, setYoutubeVideoDetailLoading] = React.useState(false);
+  const [youtubeVideoDetailRefreshing, setYoutubeVideoDetailRefreshing] = React.useState(false);
+  const [youtubeVideoDetailError, setYoutubeVideoDetailError] = React.useState('');
+  const [youtubeVideoMetadataError, setYoutubeVideoMetadataError] = React.useState('');
   const [compressionFile, setCompressionFile] = React.useState<File | null>(null);
   const [compressionPreset, setCompressionPreset] = React.useState<VideoCompressionPreset>('balanced');
   const [compressionStatus, setCompressionStatus] = React.useState<RunStatus>('idle');
@@ -255,6 +262,12 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
       void loadYouTubeVideos({ showLoading: true, showError: true });
     }
   }, [view]);
+
+  React.useEffect(() => {
+    if (view === 'videoDetail' && videoId) {
+      void loadYouTubeVideoDetail(videoId, { showLoading: true, showError: true });
+    }
+  }, [view, videoId]);
 
   React.useEffect(() => {
     if (compressionStatus !== 'running') return undefined;
@@ -517,6 +530,47 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
       if (options.showLoading) {
         setYoutubeVideosLoading(false);
       }
+    }
+  }
+
+  async function loadYouTubeVideoDetail(id: string, options: { showLoading?: boolean; showError?: boolean } = {}) {
+    if (options.showLoading) {
+      setYoutubeVideoDetailLoading(true);
+    }
+    if (options.showError) {
+      setYoutubeVideoDetailError('');
+      setYoutubeVideoMetadataError('');
+    }
+
+    try {
+      const response = await api.getYouTubeVideo(id);
+      setYoutubeVideoDetail(response.video);
+      setYoutubeVideoMetadataError(response.metadataError || '');
+    } catch (caught) {
+      setYoutubeVideoDetail(null);
+      if (options.showError) {
+        setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось загрузить видео.'));
+      }
+    } finally {
+      if (options.showLoading) {
+        setYoutubeVideoDetailLoading(false);
+      }
+    }
+  }
+
+  async function refreshYouTubeVideoMetadata(id: string) {
+    setYoutubeVideoDetailRefreshing(true);
+    setYoutubeVideoDetailError('');
+    setYoutubeVideoMetadataError('');
+
+    try {
+      const response = await api.refreshYouTubeVideoMetadata(id);
+      setYoutubeVideoDetail(response.video);
+      setYoutubeVideoMetadataError(response.metadataError || '');
+    } catch (caught) {
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось обновить метаданные.'));
+    } finally {
+      setYoutubeVideoDetailRefreshing(false);
     }
   }
 
@@ -1001,10 +1055,10 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
             <Link
               href={item.href}
               key={item.id}
-              aria-current={item.id === view ? 'page' : undefined}
+              aria-current={isNavigationItemActive(item.id, view) ? 'page' : undefined}
               className={cn(
                 'inline-flex min-h-10 items-center rounded-md border px-4 py-2 text-sm font-medium transition',
-                item.id === view
+                isNavigationItemActive(item.id, view)
                   ? 'border-neutral-950 bg-neutral-950 text-white'
                   : 'border-neutral-200 bg-white text-neutral-800 hover:border-neutral-300 hover:bg-neutral-50'
               )}
@@ -1063,6 +1117,11 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                       {video.channelTitle && <p className="text-sm text-neutral-600">{video.channelTitle}</p>}
                       <p className="text-xs text-neutral-500">Добавлено: {formatHistoryDate(video.createdAt)}</p>
                       <div className="flex flex-wrap gap-2">
+                        <Button asChild className="w-fit">
+                          <Link href={buildVideoDetailPath(video.id)}>
+                            Подробнее
+                          </Link>
+                        </Button>
                         <Button asChild variant="secondary" className="w-fit">
                           <a href={video.url} target="_blank" rel="noreferrer">
                             <ExternalLink className="h-4 w-4" />
@@ -1073,6 +1132,193 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId }: Transc
                     </div>
                   </article>
                 ))}
+              </section>
+            )}
+          </section>
+        )}
+
+        {view === 'videoDetail' && (
+          <section className="grid gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Button asChild variant="secondary" className="w-fit">
+                <Link href="/videos">
+                  <ArrowLeft className="h-4 w-4" />
+                  Назад
+                </Link>
+              </Button>
+              {youtubeVideoDetail && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-fit"
+                  onClick={() => void refreshYouTubeVideoMetadata(youtubeVideoDetail.id)}
+                  disabled={youtubeVideoDetailRefreshing}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Обновить метаданные
+                </Button>
+              )}
+            </div>
+
+            {youtubeVideoDetailError && (
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{youtubeVideoDetailError}</p>
+            )}
+
+            {youtubeVideoMetadataError && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{youtubeVideoMetadataError}</p>
+            )}
+
+            {youtubeVideoDetailLoading && (
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">Загружаю видео...</p>
+            )}
+
+            {!youtubeVideoDetailLoading && youtubeVideoDetail && (
+              <section className="grid gap-5">
+                <article className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-[280px_1fr]">
+                  {youtubeVideoDetail.thumbnailUrl ? (
+                    <img
+                      src={youtubeVideoDetail.thumbnailUrl}
+                      alt=""
+                      className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
+                    />
+                  ) : (
+                    <div className="aspect-video w-full rounded-md border border-neutral-200 bg-neutral-100" />
+                  )}
+                  <div className="grid content-start gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <h2 className="text-xl font-semibold break-words">{youtubeVideoDetail.title || youtubeVideoDetail.url}</h2>
+                      <Badge variant="secondary">{formatYouTubeVideoStatus(youtubeVideoDetail.status)}</Badge>
+                    </div>
+                    {youtubeVideoDetail.channelTitle && <p className="text-sm text-neutral-600">{youtubeVideoDetail.channelTitle}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="secondary" className="w-fit">
+                        <a href={youtubeVideoDetail.url} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                          Открыть YouTube
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+
+                <section className="grid gap-3 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Основное</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-2 text-sm">
+                      {renderMetaRow('ID в CRM', youtubeVideoDetail.id)}
+                      {renderMetaRow('YouTube ID', youtubeVideoDetail.youtubeVideoId)}
+                      {renderMetaRow('Добавлено', formatHistoryDate(youtubeVideoDetail.createdAt))}
+                      {renderMetaRow('Обновлено', formatHistoryDate(youtubeVideoDetail.updatedAt))}
+                      {renderMetaRow('Метаданные загружены', youtubeVideoDetail.metadataFetchedAt ? formatHistoryDate(youtubeVideoDetail.metadataFetchedAt) : '')}
+                      {renderMetaRow('Длительность', formatVideoDuration(youtubeVideoDetail))}
+                      {renderMetaRow('Дата загрузки', formatYouTubeUploadDate(youtubeVideoDetail.uploadDate))}
+                      {renderMetaRow('Timestamp публикации', youtubeVideoDetail.timestamp ? formatHistoryDate(youtubeVideoDetail.timestamp * 1000) : '')}
+                      {renderMetaRow('Ссылка', youtubeVideoDetail.webpageUrl || youtubeVideoDetail.url)}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Канал</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-2 text-sm">
+                      {renderMetaRow('Канал', youtubeVideoDetail.channelTitle)}
+                      {renderMetaRow('Channel ID', youtubeVideoDetail.channelId)}
+                      {renderMetaRow('Channel URL', youtubeVideoDetail.channelUrl)}
+                      {renderMetaRow('Uploader', youtubeVideoDetail.uploader)}
+                      {renderMetaRow('Uploader ID', youtubeVideoDetail.uploaderId)}
+                      {renderMetaRow('Uploader URL', youtubeVideoDetail.uploaderUrl)}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Статистика</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-2 text-sm">
+                      {renderMetaRow('Просмотры', formatOptionalNumber(youtubeVideoDetail.viewCount))}
+                      {renderMetaRow('Лайки', formatOptionalNumber(youtubeVideoDetail.likeCount))}
+                      {renderMetaRow('Комментарии', formatOptionalNumber(youtubeVideoDetail.commentCount))}
+                      {renderMetaRow('Язык', youtubeVideoDetail.language)}
+                      {renderMetaRow('Доступность', youtubeVideoDetail.availability)}
+                      {renderMetaRow('Live status', youtubeVideoDetail.liveStatus)}
+                      {renderMetaRow('Возрастное ограничение', youtubeVideoDetail.ageLimit === null ? '' : `${youtubeVideoDetail.ageLimit}+`)}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Теги и категории</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 text-sm">
+                      <div className="grid gap-1">
+                        <span className="text-xs font-semibold uppercase text-neutral-500">Категории</span>
+                        <div className="flex flex-wrap gap-2">
+                          {youtubeVideoDetail.categories.length > 0
+                            ? youtubeVideoDetail.categories.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)
+                            : <span className="text-neutral-500">Нет данных</span>}
+                        </div>
+                      </div>
+                      <div className="grid gap-1">
+                        <span className="text-xs font-semibold uppercase text-neutral-500">Теги</span>
+                        <div className="flex flex-wrap gap-2">
+                          {youtubeVideoDetail.tags.length > 0
+                            ? youtubeVideoDetail.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)
+                            : <span className="text-neutral-500">Нет данных</span>}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </section>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Описание</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-800">{youtubeVideoDetail.description || 'Нет данных'}</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Форматы</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {youtubeVideoDetail.formats.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-neutral-200 text-xs uppercase text-neutral-500">
+                              <th className="py-2 pr-3">Формат</th>
+                              <th className="py-2 pr-3">Разрешение</th>
+                              <th className="py-2 pr-3">FPS</th>
+                              <th className="py-2 pr-3">Расширение</th>
+                              <th className="py-2 pr-3">Размер</th>
+                              <th className="py-2 pr-3">Аудио</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {youtubeVideoDetail.formats.map((format) => (
+                              <tr key={format.id} className="border-b border-neutral-100">
+                                <td className="py-2 pr-3 font-medium">{format.label || format.id}</td>
+                                <td className="py-2 pr-3">{format.resolution || (format.width && format.height ? `${format.width}x${format.height}` : '') || '—'}</td>
+                                <td className="py-2 pr-3">{format.fps || '—'}</td>
+                                <td className="py-2 pr-3">{format.ext || '—'}</td>
+                                <td className="py-2 pr-3">{format.sizeLabel || '—'}</td>
+                                <td className="py-2 pr-3">{format.hasAudio ? 'Есть' : 'Отдельно'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-neutral-600">Нет данных о форматах.</p>
+                    )}
+                  </CardContent>
+                </Card>
               </section>
             )}
           </section>
@@ -2052,9 +2298,39 @@ function formatElapsed(totalSeconds: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function isNavigationItemActive(itemId: AppView, view: AppView) {
+  return itemId === view || (itemId === 'videos' && view === 'videoDetail');
+}
+
 function formatHistoryDate(value: number) {
   if (!Number.isFinite(value) || value <= 0) return 'Нет данных';
   return new Date(value).toLocaleString('ru-RU');
+}
+
+function formatOptionalNumber(value: number | null) {
+  return value === null ? '' : new Intl.NumberFormat('ru-RU').format(value);
+}
+
+function formatVideoDuration(video: YouTubeVideo) {
+  if (video.durationLabel) return video.durationLabel;
+  if (video.durationSeconds === null) return '';
+  return formatElapsed(video.durationSeconds);
+}
+
+function formatYouTubeUploadDate(value: string) {
+  const match = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
+  if (!match) return value;
+  return `${match[3]}.${match[2]}.${match[1]}`;
+}
+
+function renderMetaRow(label: string, value: React.ReactNode) {
+  const displayValue = value === null || value === undefined || value === '' ? 'Нет данных' : value;
+  return (
+    <div className="grid gap-1 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0">
+      <span className="text-xs font-semibold uppercase text-neutral-500">{label}</span>
+      <span className="break-words text-neutral-900">{displayValue}</span>
+    </div>
+  );
 }
 
 function formatYouTubeVideoStatus(status: YouTubeVideo['status']) {
