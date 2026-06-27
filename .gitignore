@@ -36,3 +36,4 @@ runtime/obsidian/*
 .DS_Store
 npm-debug.log*
 .superpowers/
+.worktrees/
