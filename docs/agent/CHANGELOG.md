@@ -2,6 +2,12 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-06-28
+
+- Изменено: пункт верхнего меню CRM «Видео» перенесен на первое место перед «Транскрибатор».
+- Проверено: точечный `tsx --test apps/crm/src/components/crm-navigation.test.ts`; `pnpm --filter @transcribator/crm check`; `git diff --check`.
+- Документация: обновлен `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-27
 
 - Исправлено: content script Transcribator extension больше не вызывает `browser.runtime.sendMessage`, чтобы stale script после перезагрузки расширения не ломал кнопку «Добавить видео».

@@ -7,10 +7,10 @@ import {
 } from './crm-navigation.js';
 
 describe('crm navigation', () => {
-  it('keeps history as the last top-level menu item with page URLs', () => {
+  it('keeps videos as the first top-level menu item with page URLs', () => {
     assert.deepEqual(crmNavigationItems.map((item) => [item.id, item.href, item.label]), [
-      ['transcribe', '/', 'Транскрибатор'],
       ['videos', '/videos', 'Видео'],
+      ['transcribe', '/', 'Транскрибатор'],
       ['download', '/download', 'Скачать видео'],
       ['compress', '/compress', 'Сжать видео'],
       ['history', '/history', 'История']
