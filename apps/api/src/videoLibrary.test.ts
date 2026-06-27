@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { createVideoLibraryStore } from './videoLibrary.js';
+import { createVideoLibraryStore, type YouTubeVideoMetadata } from './videoLibrary.js';
 
 describe('YouTube video library store', () => {
   it('adds YouTube videos and deduplicates them by video id', async () => {
@@ -136,9 +136,189 @@ describe('YouTube video library store', () => {
       store.close();
     }
   });
+
+  it('fills missing channel metadata when adding a video without channel title', async () => {
+    const store = createVideoLibraryStore({
+      dbPath: await tempDbPath(),
+      now: () => 123456,
+      metadataFetcher: async (url) => {
+        assert.equal(url, 'https://www.youtube.com/watch?v=missing1234');
+        return createMetadata({
+          title: 'Видео с метаданными',
+          channelTitle: 'Канал из yt-dlp',
+          uploader: 'Автор из yt-dlp'
+        });
+      }
+    });
+
+    try {
+      const result = await store.addVideoWithMetadata({
+        url: 'https://www.youtube.com/watch?v=missing1234',
+        title: 'Название из расширения'
+      });
+
+      assert.equal(result.video.channelTitle, 'Канал из yt-dlp');
+      assert.equal(result.video.uploader, 'Автор из yt-dlp');
+      assert.equal(result.video.metadataFetchedAt, 123456);
+      assert.equal(store.getVideoById(result.video.id)?.channelTitle, 'Канал из yt-dlp');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('loads full metadata when adding a video even if extension already sent channel title', async () => {
+    const store = createVideoLibraryStore({
+      dbPath: await tempDbPath(),
+      now: () => 123456,
+      metadataFetcher: async (url) => {
+        assert.equal(url, 'https://www.youtube.com/watch?v=fullmeta123');
+        return createMetadata({
+          title: 'Полная карточка',
+          description: 'Описание из yt-dlp',
+          channelTitle: 'Канал из yt-dlp',
+          uploader: 'Автор из yt-dlp',
+          durationSeconds: 321,
+          tags: ['tag-a', 'tag-b']
+        });
+      }
+    });
+
+    try {
+      const result = await store.addVideoWithMetadata({
+        url: 'https://www.youtube.com/watch?v=fullmeta123',
+        title: 'Название из расширения',
+        channelTitle: 'Канал из расширения',
+        thumbnailUrl: 'https://img.youtube.com/vi/fullmeta123/hqdefault.jpg'
+      });
+
+      assert.equal(result.video.title, 'Полная карточка');
+      assert.equal(result.video.description, 'Описание из yt-dlp');
+      assert.equal(result.video.channelTitle, 'Канал из yt-dlp');
+      assert.equal(result.video.durationSeconds, 321);
+      assert.deepEqual(result.video.tags, ['tag-a', 'tag-b']);
+      assert.equal(result.video.metadataFetchedAt, 123456);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('enriches existing list rows that were saved without channel metadata', async () => {
+    const store = createVideoLibraryStore({
+      dbPath: await tempDbPath(),
+      now: () => 123456,
+      metadataFetcher: async (url) => {
+        assert.equal(url, 'https://www.youtube.com/watch?v=list1234567');
+        return createMetadata({
+          title: 'Видео из списка',
+          channelTitle: 'Канал списка',
+          uploader: 'Автор списка'
+        });
+      }
+    });
+
+    try {
+      const added = store.addVideo({
+        url: 'https://www.youtube.com/watch?v=list1234567',
+        title: 'Видео без канала'
+      });
+
+      assert.equal(added.video.channelTitle, '');
+
+      const videos = await store.listVideosWithMetadata();
+
+      assert.equal(videos[0]?.channelTitle, 'Канал списка');
+      assert.equal(videos[0]?.uploader, 'Автор списка');
+      assert.equal(videos[0]?.metadataFetchedAt, 123456);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('enriches existing list rows without full metadata even when channel title is already known', async () => {
+    const store = createVideoLibraryStore({
+      dbPath: await tempDbPath(),
+      now: () => 123456,
+      metadataFetcher: async (url) => {
+        assert.equal(url, 'https://www.youtube.com/watch?v=knownchan1');
+        return createMetadata({
+          title: 'Видео с полной metadata',
+          description: 'Описание для списка',
+          channelTitle: 'Канал из списка',
+          durationSeconds: 654,
+          tags: ['existing']
+        });
+      }
+    });
+
+    try {
+      const added = store.addVideo({
+        url: 'https://www.youtube.com/watch?v=knownchan1',
+        title: 'Видео с каналом, но без metadata',
+        channelTitle: 'Канал из расширения'
+      });
+
+      assert.equal(added.video.channelTitle, 'Канал из расширения');
+      assert.equal(added.video.metadataFetchedAt, null);
+
+      const videos = await store.listVideosWithMetadata();
+
+      assert.equal(videos[0]?.title, 'Видео с полной metadata');
+      assert.equal(videos[0]?.description, 'Описание для списка');
+      assert.equal(videos[0]?.channelTitle, 'Канал из списка');
+      assert.equal(videos[0]?.durationSeconds, 654);
+      assert.deepEqual(videos[0]?.tags, ['existing']);
+      assert.equal(videos[0]?.metadataFetchedAt, 123456);
+    } finally {
+      store.close();
+    }
+  });
 });
 
 async function tempDbPath(): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'transcribator-video-library-'));
   return path.join(dir, 'test.sqlite');
+}
+
+function createMetadata(overrides: Partial<YouTubeVideoMetadata> = {}): YouTubeVideoMetadata {
+  return {
+    title: 'Подробное видео',
+    description: 'Описание ролика',
+    channelTitle: 'Канал',
+    channelId: 'channel-id',
+    channelUrl: 'https://www.youtube.com/channel/channel-id',
+    uploader: 'Автор',
+    uploaderId: 'uploader-id',
+    uploaderUrl: 'https://www.youtube.com/@author',
+    durationSeconds: 3723,
+    durationLabel: '1:02:03',
+    uploadDate: '20260610',
+    timestamp: 1781059200,
+    viewCount: 12345,
+    likeCount: 234,
+    commentCount: 12,
+    categories: ['Education'],
+    tags: ['crm', 'youtube'],
+    language: 'ru',
+    availability: 'public',
+    liveStatus: 'not_live',
+    ageLimit: 0,
+    thumbnailUrl: 'https://img.youtube.com/vi/detail12345/maxresdefault.jpg',
+    webpageUrl: 'https://www.youtube.com/watch?v=detail12345',
+    formats: [
+      {
+        id: '137',
+        label: '1080p · mp4 · 30fps · ~150 MB · audio will be merged',
+        ext: 'mp4',
+        resolution: '1920x1080',
+        height: 1080,
+        width: 1920,
+        fps: 30,
+        sizeLabel: '~150 MB',
+        hasAudio: false,
+        hasVideo: true
+      }
+    ],
+    rawMetadataJson: '{"title":"Подробное видео"}',
+    ...overrides
+  };
 }

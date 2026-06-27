@@ -204,7 +204,7 @@ app.post('/videos/download', async (req: Request, res: Response, next: NextFunct
 
 app.get('/videos/library', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    res.json({ videos: defaultVideoLibraryStore.listVideos() });
+    res.json({ videos: await defaultVideoLibraryStore.listVideosWithMetadata() });
   } catch (error) {
     next(error);
   }
@@ -238,7 +238,7 @@ app.post('/videos/library/:id/metadata', async (req: Request, res: Response, nex
 app.post('/videos/library', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = youtubeVideoCreateRequestSchema.parse(req.body || {});
-    res.status(201).json(defaultVideoLibraryStore.addVideo(body));
+    res.status(201).json(await defaultVideoLibraryStore.addVideoWithMetadata(body));
   } catch (error) {
     next(error);
   }

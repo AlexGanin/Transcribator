@@ -4,6 +4,12 @@
 
 ## 2026-06-27
 
+- Исправлено: content script Transcribator extension больше не вызывает `browser.runtime.sendMessage`, чтобы stale script после перезагрузки расширения не ломал кнопку «Добавить видео».
+- Проверено: `pnpm --filter @transcribator/extension check`.
+- Исправлено: YouTube video backlog больше не оставляет ролики из extension неполными в CRM: extension читает fallback `ytInitialPlayerResponse`, API сразу кэширует полную metadata через `yt-dlp` при добавлении и дозаполняет старые записи без `metadataFetchedAt` при обновлении списка.
+- Проверено: точечные `node --test` для `apps/extension/src/youtube-video.test.ts` и `apps/api/src/videoLibrary.test.ts`; `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, `pnpm --filter @transcribator/extension check`, `pnpm --filter @transcribator/crm check`; разовая дозагрузка metadata для текущей runtime-базы.
+- Добавлено: CRM `/videos` получила левый сайдбар каналов с количеством добавленных роликов и фильтрацией списка по выбранному каналу.
+- Проверено: точечные `node --test` для `apps/crm/src/components/youtube-video-channels.test.ts` и `apps/crm/src/components/crm-navigation.test.ts`; `pnpm --filter @transcribator/crm check`.
 - Добавлено: детальная страница CRM `/videos/[id]` для добавленных YouTube-видео с кнопкой «Назад», обновлением metadata, описанием, длительностью, датами, статистикой, каналом, тегами, категориями и таблицей форматов.
 - Изменено: API `GET /videos/library/:id` и `POST /videos/library/:id/metadata` кэшируют и обновляют `yt-dlp --dump-json` metadata в SQLite `youtube_videos`; `packages/shared` и `packages/api-client` получили соответствующие контракты.
 - Проверено: точечные `node --test` для `apps/api/src/videoLibrary.test.ts`, `packages/api-client/src/index.test.ts`, `apps/crm/src/components/crm-navigation.test.ts`; `pnpm --filter @transcribator/shared check`, `pnpm --filter @transcribator/api test`, `pnpm --filter @transcribator/api typecheck`, `pnpm --filter @transcribator/api build`, `pnpm --filter @transcribator/api-client check`, `pnpm --filter @transcribator/crm check`, `git diff --check`.

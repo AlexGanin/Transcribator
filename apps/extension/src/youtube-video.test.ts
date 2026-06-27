@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   buildYouTubeThumbnailUrl,
-  extractYouTubeVideoId
+  extractYouTubeVideoId,
+  readYouTubeVideoMetadata
 } from './youtube-video.js';
 
 describe('YouTube extension helpers', () => {
@@ -18,5 +19,21 @@ describe('YouTube extension helpers', () => {
       buildYouTubeThumbnailUrl('dQw4w9WgXcQ'),
       'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg'
     );
+  });
+
+  it('reads channel title from YouTube player metadata when owner markup is unavailable', () => {
+    const doc = {
+      title: 'Видео из вкладки - YouTube',
+      querySelector: () => null,
+      querySelectorAll: () => [
+        {
+          textContent: 'var ytInitialPlayerResponse = {"videoDetails":{"author":"Канал из player response"}};'
+        }
+      ]
+    } as unknown as Document;
+
+    const metadata = readYouTubeVideoMetadata(doc, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+
+    assert.equal(metadata?.channelTitle, 'Канал из player response');
   });
 });

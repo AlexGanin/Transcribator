@@ -73,6 +73,11 @@ import {
   type LightboxDirection
 } from './history-lightbox-navigation';
 import { buildCleanTranscriptClipboardText } from './transcript-clipboard';
+import {
+  ALL_YOUTUBE_CHANNELS_ID,
+  buildYouTubeChannelFilters,
+  filterYouTubeVideosByChannel
+} from './youtube-video-channels';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:2001';
 
@@ -204,6 +209,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
   const [youtubeVideos, setYoutubeVideos] = React.useState<YouTubeVideo[]>([]);
   const [youtubeVideosLoading, setYoutubeVideosLoading] = React.useState(false);
   const [youtubeVideosError, setYoutubeVideosError] = React.useState('');
+  const [selectedYoutubeChannelId, setSelectedYoutubeChannelId] = React.useState(ALL_YOUTUBE_CHANNELS_ID);
   const [youtubeVideoDetail, setYoutubeVideoDetail] = React.useState<YouTubeVideo | null>(null);
   const [youtubeVideoDetailLoading, setYoutubeVideoDetailLoading] = React.useState(false);
   const [youtubeVideoDetailRefreshing, setYoutubeVideoDetailRefreshing] = React.useState(false);
@@ -222,6 +228,11 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
   const compressionEventSourceRef = React.useRef<EventSource | null>(null);
   const lightboxDeleteInFlightRef = React.useRef(false);
   const cleanTranscriptCopyTimerRef = React.useRef<number | null>(null);
+  const youtubeChannelFilters = React.useMemo(() => buildYouTubeChannelFilters(youtubeVideos), [youtubeVideos]);
+  const filteredYoutubeVideos = React.useMemo(
+    () => filterYouTubeVideosByChannel(youtubeVideos, selectedYoutubeChannelId),
+    [youtubeVideos, selectedYoutubeChannelId]
+  );
 
   React.useEffect(() => {
     void loadHistory();
@@ -262,6 +273,12 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
       void loadYouTubeVideos({ showLoading: true, showError: true });
     }
   }, [view]);
+
+  React.useEffect(() => {
+    if (!youtubeChannelFilters.some((filter) => filter.id === selectedYoutubeChannelId)) {
+      setSelectedYoutubeChannelId(ALL_YOUTUBE_CHANNELS_ID);
+    }
+  }, [youtubeChannelFilters, selectedYoutubeChannelId]);
 
   React.useEffect(() => {
     if (view === 'videoDetail' && videoId) {
@@ -1097,41 +1114,80 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
             )}
 
             {youtubeVideos.length > 0 && (
-              <section className="grid gap-3">
-                {youtubeVideos.map((video) => (
-                  <article key={video.id} className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-[160px_1fr]">
-                    {video.thumbnailUrl ? (
-                      <img
-                        src={video.thumbnailUrl}
-                        alt=""
-                        className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
-                      />
-                    ) : (
-                      <div className="aspect-video w-full rounded-md border border-neutral-200 bg-neutral-100" />
-                    )}
-                    <div className="grid gap-2">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <h3 className="text-base font-semibold break-words">{video.title || video.url}</h3>
-                        <Badge variant="secondary">{formatYouTubeVideoStatus(video.status)}</Badge>
+              <section className="grid gap-4 lg:grid-cols-[240px_1fr] lg:items-start">
+                <aside className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
+                  <h3 className="px-1 pb-2 text-sm font-semibold">Каналы</h3>
+                  <nav className="grid gap-1" aria-label="Каналы YouTube">
+                    {youtubeChannelFilters.map((filter) => {
+                      const selected = filter.id === selectedYoutubeChannelId;
+                      return (
+                        <button
+                          type="button"
+                          key={filter.id}
+                          aria-current={selected ? 'true' : undefined}
+                          className={cn(
+                            'grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
+                            selected
+                              ? 'bg-neutral-950 font-semibold text-white'
+                              : 'text-neutral-800 hover:bg-neutral-100'
+                          )}
+                          onClick={() => setSelectedYoutubeChannelId(filter.id)}
+                        >
+                          <span className="truncate">{filter.label}</span>
+                          <span
+                            className={cn(
+                              'rounded-full px-2 py-0.5 text-xs',
+                              selected ? 'bg-white text-neutral-950' : 'bg-neutral-100 text-neutral-600'
+                            )}
+                          >
+                            ({filter.count})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </aside>
+
+                <section className="grid gap-3">
+                  {filteredYoutubeVideos.length === 0 && (
+                    <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">В этом канале пока нет видео.</p>
+                  )}
+
+                  {filteredYoutubeVideos.map((video) => (
+                    <article key={video.id} className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-[160px_1fr]">
+                      {video.thumbnailUrl ? (
+                        <img
+                          src={video.thumbnailUrl}
+                          alt=""
+                          className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
+                        />
+                      ) : (
+                        <div className="aspect-video w-full rounded-md border border-neutral-200 bg-neutral-100" />
+                      )}
+                      <div className="grid gap-2">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <h3 className="text-base font-semibold break-words">{video.title || video.url}</h3>
+                          <Badge variant="secondary">{formatYouTubeVideoStatus(video.status)}</Badge>
+                        </div>
+                        {(video.channelTitle || video.uploader) && <p className="text-sm text-neutral-600">{video.channelTitle || video.uploader}</p>}
+                        <p className="text-xs text-neutral-500">Добавлено: {formatHistoryDate(video.createdAt)}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button asChild className="w-fit">
+                            <Link href={buildVideoDetailPath(video.id)}>
+                              Подробнее
+                            </Link>
+                          </Button>
+                          <Button asChild variant="secondary" className="w-fit">
+                            <a href={video.url} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4" />
+                              Открыть
+                            </a>
+                          </Button>
+                        </div>
                       </div>
-                      {video.channelTitle && <p className="text-sm text-neutral-600">{video.channelTitle}</p>}
-                      <p className="text-xs text-neutral-500">Добавлено: {formatHistoryDate(video.createdAt)}</p>
-                      <div className="flex flex-wrap gap-2">
-                        <Button asChild className="w-fit">
-                          <Link href={buildVideoDetailPath(video.id)}>
-                            Подробнее
-                          </Link>
-                        </Button>
-                        <Button asChild variant="secondary" className="w-fit">
-                          <a href={video.url} target="_blank" rel="noreferrer">
-                            <ExternalLink className="h-4 w-4" />
-                            Открыть
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  ))}
+                </section>
               </section>
             )}
           </section>

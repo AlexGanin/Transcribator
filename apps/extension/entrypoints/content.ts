@@ -89,10 +89,6 @@ export default defineContentScript({
 
       target.hidden = false;
       setButtonState(target, 'checking');
-      await browser.runtime.sendMessage({
-        type: 'TRANSCRIBATOR_YOUTUBE_URL',
-        url: metadata.url
-      });
 
       try {
         const apiBaseUrl = await readApiBaseUrl();
@@ -115,10 +111,6 @@ export default defineContentScript({
       if (!metadata) return;
 
       setButtonState(target, 'adding');
-      await browser.runtime.sendMessage({
-        type: 'TRANSCRIBATOR_YOUTUBE_URL',
-        url: metadata.url
-      });
 
       try {
         const apiBaseUrl = await readApiBaseUrl();
@@ -151,7 +143,7 @@ function setButtonState(button: HTMLButtonElement, state: ButtonState): void {
   button.textContent = {
     checking: 'Проверяю...',
     ready: ADD_VIDEO_BUTTON_LABEL,
-    adding: 'Добавляю...',
+    adding: 'Загружаю данные...',
     added: 'Добавлено',
     error: 'Ошибка API'
   }[state];

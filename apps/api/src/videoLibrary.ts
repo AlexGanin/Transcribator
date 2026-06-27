@@ -27,6 +27,8 @@ export interface CheckYouTubeVideoResult {
 
 export type YouTubeVideoMetadataFetcher = (url: string) => Promise<YouTubeVideoMetadata>;
 
+const DEFAULT_LIST_METADATA_ENRICHMENT_LIMIT = 20;
+
 export interface YouTubeVideoMetadata {
   title: string;
   description: string;
@@ -162,6 +164,14 @@ export class VideoLibraryStore {
     return { video: this.getByYouTubeVideoId(youtubeVideoId) || video, alreadyAdded: false };
   }
 
+  async addVideoWithMetadata(input: YouTubeVideoCreateRequest): Promise<AddYouTubeVideoResult> {
+    const result = this.addVideo(input);
+    return {
+      ...result,
+      video: await this.enrichMissingMetadata(result.video)
+    };
+  }
+
   checkVideo(url: string): CheckYouTubeVideoResult {
     const youtubeVideoId = extractYouTubeVideoId(url);
     const video = youtubeVideoId ? this.getByYouTubeVideoId(youtubeVideoId) : null;
@@ -209,6 +219,19 @@ export class VideoLibraryStore {
     `).all(limit) as unknown as YouTubeVideoRow[];
 
     return rows.map(mapYouTubeVideoRow);
+  }
+
+  async listVideosWithMetadata(limit = 500): Promise<YouTubeVideo[]> {
+    const videos = this.listVideos(limit);
+    const missingMetadataVideos = videos
+      .filter((video) => !video.metadataFetchedAt)
+      .slice(0, DEFAULT_LIST_METADATA_ENRICHMENT_LIMIT);
+
+    for (const video of missingMetadataVideos) {
+      await this.enrichMissingMetadata(video);
+    }
+
+    return missingMetadataVideos.length > 0 ? this.listVideos(limit) : videos;
   }
 
   private getByYouTubeVideoId(youtubeVideoId: string): YouTubeVideo | null {
@@ -285,6 +308,21 @@ export class VideoLibraryStore {
       metadataFetchedAt,
       id
     );
+  }
+
+  private async enrichMissingMetadata(video: YouTubeVideo): Promise<YouTubeVideo> {
+    if (video.metadataFetchedAt) return video;
+    return this.fetchAndSaveMetadata(video);
+  }
+
+  private async fetchAndSaveMetadata(video: YouTubeVideo): Promise<YouTubeVideo> {
+    try {
+      const metadata = await this.metadataFetcher(video.url);
+      this.saveMetadata(video.id, metadata);
+      return this.getVideoById(video.id) || video;
+    } catch {
+      return video;
+    }
   }
 
   private ensureSchema(): void {

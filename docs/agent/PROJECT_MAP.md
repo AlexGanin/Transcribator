@@ -104,6 +104,7 @@ apps/api
 - `src/videoLibrary.ts`
   - Хранит добавленные из YouTube видео в таблице SQLite `youtube_videos`.
   - Нормализует YouTube URL до canonical watch URL, дедуплицирует по `youtubeVideoId`, отдает список для CRM `/videos` и детальную карточку `/videos/[id]`.
+  - При добавлении сразу пытается сохранить полную metadata через `yt-dlp --dump-json`; при чтении списка дополнительно дозаполняет старые записи без `metadataFetchedAt`.
   - Для детальной карточки кэширует metadata из `yt-dlp --dump-json`: описание, длительность, даты, статистику, канал, теги, категории, доступность и форматы.
 
 - `src/videoCompression.ts`
@@ -143,7 +144,7 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - transcription history
-  - YouTube video backlog на странице `/videos` и детальная карточка `/videos/[id]`
+  - YouTube video backlog на странице `/videos` с сайдбаром каналов и детальная карточка `/videos/[id]`
   - удаление записей истории с подтверждением
   - копирование текста `Clean Transcript` из текущего результата и деталки истории
   - video format selection
@@ -170,9 +171,11 @@ apps/extension
 
 - WXT + React + TypeScript Manifest V3 extension.
 - Popup использует `@transcribator/api-client` и содержит отдельную кнопку «Добавить видео» для сохранения текущего YouTube-ролика в backlog без запуска транскрибации.
-- Background service worker хранит defaults extension и последний YouTube URL.
+- Background service worker хранит defaults extension; popup хранит последний YouTube URL в extension storage.
 - YouTube content script использует Shadow DOM style isolation.
 - YouTube content script показывает кнопку «Добавить видео» на video/shorts/live страницах, проверяет `/videos/library/check` и добавляет видео через `/videos/library`.
+- YouTube content script не использует `browser.runtime.sendMessage`, чтобы stale content script после перезагрузки расширения не ломал кнопку.
+- YouTube metadata helper читает канал из owner DOM markup и fallback `ytInitialPlayerResponse.videoDetails.author`.
 - `src/api-base-url.ts` держит дефолт `http://127.0.0.1:2001` и мигрирует старый локальный дефолт `3001`.
 - Remote hosted code не используется.
 
@@ -293,11 +296,14 @@ YouTube watch/shorts/live page
   -> POST /videos/library
   -> shared Zod validation
   -> videoLibrary.addVideo
+  -> API fetches and caches full video metadata through yt-dlp when needed
   -> SQLite youtube_videos unique youtube_video_id
   -> CRM /videos
   -> packages/api-client getYouTubeVideos
   -> GET /videos/library
-  -> list cards with title, channel, thumbnail, status and YouTube link
+  -> API enriches saved rows that still have no cached metadata
+  -> group loaded videos by channel/uploader in CRM sidebar
+  -> list filtered cards with title, channel, thumbnail, status and YouTube link
   -> CRM /videos/[id]
   -> GET /videos/library/:id
   -> videoLibrary.getVideoDetail
