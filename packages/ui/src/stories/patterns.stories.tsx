@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Download, FileAudio, History, WandSparkles } from 'lucide-react';
+import { Download, FileAudio, FileVideo, WandSparkles } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -134,14 +134,14 @@ export const ResultSummary: Story = {
             Скачать TXT
           </Button>
           <Button variant="secondary">Скопировать</Button>
-          <Button variant="ghost">Открыть историю</Button>
+          <Button variant="ghost">Открыть видео</Button>
         </div>
       </CardContent>
     </Card>
   )
 };
 
-export const HistoryCard: Story = {
+export const RecentTasksCard: Story = {
   render: () => (
     <Card className="storybook-panel">
       <CardHeader className="flex-row items-start justify-between gap-4">
@@ -149,7 +149,7 @@ export const HistoryCard: Story = {
           <CardTitle>Последние задачи</CardTitle>
           <p className="text-sm text-neutral-500">Недавние транскрибации и скачивания</p>
         </div>
-        <History className="h-5 w-5 text-neutral-500" />
+        <FileVideo className="h-5 w-5 text-neutral-500" />
       </CardHeader>
       <CardContent className="grid gap-3">
         {[

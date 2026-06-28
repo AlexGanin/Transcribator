@@ -55,11 +55,11 @@ export const TranscriptionResult: Story = {
   )
 };
 
-export const History: Story = {
+export const VideoQueue: Story = {
   render: () => (
     <Card className="w-[520px]">
       <CardHeader>
-        <CardTitle>История</CardTitle>
+        <CardTitle>Видео</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         {[

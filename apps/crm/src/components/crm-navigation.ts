@@ -1,4 +1,4 @@
-export type AppView = 'transcribe' | 'videos' | 'videoDetail' | 'download' | 'compress' | 'history';
+export type AppView = 'transcribe' | 'videos' | 'videoDetail' | 'download' | 'compress';
 
 export interface CrmNavigationItem {
   id: AppView;
@@ -10,13 +10,8 @@ export const crmNavigationItems: CrmNavigationItem[] = [
   { id: 'videos', href: '/videos', label: 'Видео' },
   { id: 'transcribe', href: '/', label: 'Транскрибатор' },
   { id: 'download', href: '/download', label: 'Скачать видео' },
-  { id: 'compress', href: '/compress', label: 'Сжать видео' },
-  { id: 'history', href: '/history', label: 'История' }
+  { id: 'compress', href: '/compress', label: 'Сжать видео' }
 ];
-
-export function buildHistoryDetailPath(id: string): string {
-  return `/history/${encodeURIComponent(id)}`;
-}
 
 export function buildVideoDetailPath(id: string): string {
   return `/videos/${encodeURIComponent(id)}`;

@@ -147,4 +147,65 @@ describe('api client defaults', () => {
     assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id/metadata');
     assert.equal(requests[0]?.init.method, 'POST');
   });
+
+  it('starts YouTube video transcription by CRM library id', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: FetchLike = async (input, init = {}) => {
+      requests.push({ url: String(input), init });
+      return new Response(JSON.stringify({
+        jobId: 'job-1',
+        video: {
+          id: 'video-id',
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          title: 'Видео',
+          status: 'processing',
+          transcriptionJobId: 'job-1',
+          createdAt: 1,
+          updatedAt: 2
+        }
+      }), { headers: { 'Content-Type': 'application/json' } });
+    };
+
+    const result = await createApiClient({ fetchImpl }).transcribeYouTubeVideo('video-id', {
+      engine: 'mlx-whisper',
+      screenshotsEnabled: true,
+      screenshotIntervalSeconds: 30
+    });
+
+    assert.equal(result.jobId, 'job-1');
+    assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id/transcribe');
+    assert.equal(requests[0]?.init.method, 'POST');
+    assert.deepEqual(JSON.parse(String(requests[0]?.init.body)), {
+      engine: 'mlx-whisper',
+      screenshotsEnabled: true,
+      screenshotIntervalSeconds: 30
+    });
+  });
+
+  it('updates YouTube video transcript fields', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: FetchLike = async (input, init = {}) => {
+      requests.push({ url: String(input), init });
+      return new Response(JSON.stringify({
+        video: {
+          id: 'video-id',
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          title: 'Видео',
+          status: 'done',
+          cleanText: 'clean',
+          createdAt: 1,
+          updatedAt: 2
+        }
+      }), { headers: { 'Content-Type': 'application/json' } });
+    };
+
+    const result = await createApiClient({ fetchImpl }).updateYouTubeVideoTranscript('video-id', { cleanText: 'clean' });
+
+    assert.equal(result.video.cleanText, 'clean');
+    assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id/transcript');
+    assert.equal(requests[0]?.init.method, 'PATCH');
+    assert.deepEqual(JSON.parse(String(requests[0]?.init.body)), { cleanText: 'clean' });
+  });
 });

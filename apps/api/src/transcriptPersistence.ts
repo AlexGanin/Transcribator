@@ -1,9 +1,7 @@
 import { postProcessTranscript } from './postProcess.js';
 import type { TranscriptFinalizeMeta, TranscriptSegment } from './types.js';
-import type { TranscriptionStore } from './transcriptionStore.js';
 
 export interface PersistTranscriptTextOptions {
-  store: TranscriptionStore;
   transcriptionId: string;
   createdAt: number;
   rawText: string;
@@ -24,27 +22,8 @@ export interface PersistedTranscriptResult {
 
 export function persistTranscriptText(options: PersistTranscriptTextOptions): PersistedTranscriptResult {
   const rawTranscript = normalizeRawTranscript(options.rawText);
-  options.store.upsertTranscription({
-    id: options.transcriptionId,
-    status: 'running',
-    title: options.meta.source,
-    source: options.meta.source,
-    sourceType: options.meta.sourceType,
-    engine: options.meta.engine,
-    rawText: rawTranscript,
-    summary: '',
-    formattedText: '',
-    createdAt: options.createdAt,
-    updatedAt: Date.now()
-  });
-
   const cleanTranscript = postProcessTranscript(rawTranscript);
   const segments: TranscriptSegment[] = [];
-  options.store.patchTranscription(options.transcriptionId, {
-    cleanText: cleanTranscript,
-    summary: '',
-    formattedText: ''
-  });
 
   return {
     text: cleanTranscript,

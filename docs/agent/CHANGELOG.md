@@ -4,6 +4,10 @@
 
 ## 2026-06-28
 
+- Изменено: отдельная история транскрибаций удалена из API и CRM; `youtube_videos` стала единой таблицей YouTube-видео, metadata, transcript-полей, Markdown path и JSON-скриншотов, а `/videos` получил запуск транскрибации и редактор транскрипта.
+- Проверено: `pnpm --filter @transcribator/shared check`; `pnpm --filter @transcribator/api-client check`; `pnpm --filter @transcribator/api typecheck`; `pnpm --filter @transcribator/api build`; `pnpm --filter @transcribator/api test`; точечные `tsx --test` для `packages/api-client/src/index.test.ts`, `apps/crm/src/components/crm-navigation.test.ts`, `apps/crm/src/components/screenshot-lightbox-navigation.test.ts`, `apps/crm/src/components/youtube-video-channels.test.ts`, `apps/crm/src/components/transcript-clipboard.test.ts`; `pnpm --filter @transcribator/crm check`; `pnpm --filter @transcribator/extension check`; `pnpm --filter @transcribator/ui typecheck`; `pnpm --filter @transcribator/ui build`; `pnpm --filter @transcribator/ui build-storybook`; `git diff --check`.
+- Документация: обновлены `README.md`, `docs/agent/README.md`, `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 - Изменено: пункт верхнего меню CRM «Видео» перенесен на первое место перед «Транскрибатор».
 - Проверено: точечный `tsx --test apps/crm/src/components/crm-navigation.test.ts`; `pnpm --filter @transcribator/crm check`; `git diff --check`.
 - Документация: обновлен `docs/agent/CHANGELOG.md`.

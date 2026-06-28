@@ -15,14 +15,14 @@ Transcribator
     shared/       Zod schemas, DTOs и общие types
     ui/           общие shadcn-style React components и Storybook UI Kit
   runtime/
-    transcribator.sqlite  Runtime SQLite history index
+    transcribator.sqlite  Runtime SQLite video/transcript index
     source/       Runtime-копии загруженных source files
     tmp/          Runtime temporary uploads, WAV files и CLI output folders
-    output/       Runtime transcript files и history.json
-    artifacts/    Runtime Markdown/screenshot artifacts by transcription id
+    output/       Legacy runtime output folder
+    artifacts/    Runtime Markdown/screenshot artifacts by video id
     downloads/    Runtime downloaded YouTube videos
     compressed/   Runtime compressed local videos
-    obsidian/     Runtime Obsidian-ready transcript vaults
+    obsidian/     Legacy/runtime Obsidian-ready transcript vaults
   docs/agent/     Агентская документация проекта
   package.json    Корневые pnpm workspace commands
   pnpm-lock.yaml  Workspace lockfile
@@ -62,10 +62,14 @@ apps/api
     obsidianNotes.ts
     pipeline.ts
     postProcess.ts
+    runtimePaths.ts
+    transcriptPersistence.ts
     types.ts
+    videoArtifacts.ts
     videoCompression.ts
     videoDownload.ts
     videoLibrary.ts
+    videoTranscription.ts
 ```
 
 - `tsconfig.json`
@@ -83,13 +87,14 @@ apps/api
   - In-memory job registry и event emitter layer.
   - Асинхронно запускает transcription tasks.
   - Хранит live events для SSE replay.
-  - Пишет историю запусков в `runtime/output/history.json`.
+  - Не пишет результаты в SQLite сам: persistence выполняют task-specific слои вроде `videoTranscription.ts`.
 
 - `src/pipeline.ts`
   - Основной transcription pipeline.
-  - Использует `runtime/source/`, `runtime/tmp/`, `runtime/output/` и при включенных скриншотах `runtime/obsidian/`.
+  - Использует `runtime/source/`, `runtime/tmp/` и при включенных скриншотах `runtime/artifacts/<artifact-id>/`.
   - Запускает `yt-dlp`, `ffmpeg`, локальные Whisper engines или OpenAI Audio Transcriptions.
   - Отправляет progress stages в `jobs.ts`.
+  - Возвращает raw/clean transcript и список скриншотов вызывающему слою, не сохраняя отдельную историю.
 
 - `src/obsidianNotes.ts`
   - Создает Obsidian-ready vault для транскрибации со скриншотами.
@@ -102,10 +107,19 @@ apps/api
   - Скачивает выбранные formats в `runtime/downloads/`.
 
 - `src/videoLibrary.ts`
-  - Хранит добавленные из YouTube видео в таблице SQLite `youtube_videos`.
+  - Хранит добавленные из YouTube видео и результаты их транскрибации в единой таблице SQLite `youtube_videos`.
   - Нормализует YouTube URL до canonical watch URL, дедуплицирует по `youtubeVideoId`, отдает список для CRM `/videos` и детальную карточку `/videos/[id]`.
   - При добавлении сразу пытается сохранить полную metadata через `yt-dlp --dump-json`; при чтении списка дополнительно дозаполняет старые записи без `metadataFetchedAt`.
   - Для детальной карточки кэширует metadata из `yt-dlp --dump-json`: описание, длительность, даты, статистику, канал, теги, категории, доступность и форматы.
+  - При старте удаляет legacy-таблицы `transcriptions` и `screenshots`; старые данные истории не мигрируются.
+
+- `src/videoTranscription.ts`
+  - Запускает транскрибацию конкретного YouTube-видео через `jobs.createJob`.
+  - Переводит строку `youtube_videos` в `processing`, а после `done`/`error` сохраняет тексты, engine, timestamps, screenshots JSON или ошибку.
+
+- `src/videoArtifacts.ts`
+  - Редактирует transcript-поля видео, создает Markdown в `runtime/artifacts/<video-id>/transcript.md`.
+  - Управляет JSON-индексом скриншотов видео и перемещает файлы между `screenshots/` и `trash/screenshots/`.
 
 - `src/videoCompression.ts`
   - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
@@ -123,14 +137,17 @@ apps/api
 ```txt
 apps/crm
   app/
-    videos/[id]/page.tsx
-    videos/page.tsx
+    compress/page.tsx
+    download/page.tsx
     globals.css
     layout.tsx
     page.tsx
+    videos/[id]/page.tsx
+    videos/page.tsx
   next.config.ts
   postcss.config.ts
-  src/components/history-delete.ts
+  src/components/crm-navigation.ts
+  src/components/screenshot-lightbox-navigation.ts
   src/components/transcribator-app.tsx
 ```
 
@@ -143,10 +160,9 @@ apps/crm
   - file transcription
   - transcription engine selection
   - SSE progress
-  - transcription history
-  - YouTube video backlog на странице `/videos` с сайдбаром каналов и детальная карточка `/videos/[id]`
-  - удаление записей истории с подтверждением
-  - копирование текста `Clean Transcript` из текущего результата и деталки истории
+  - YouTube video backlog на странице `/videos` с сайдбаром каналов, статусом транскрипта и кнопкой «Транскрибировать»
+  - детальная карточка `/videos/[id]` с YouTube metadata, запуском транскрибации, редактированием transcript-полей, Markdown action, галереей скриншотов и корзиной
+  - копирование текста `Clean Transcript` из текущего результата и деталки видео
   - video format selection
   - video downloads
   - local video compression
@@ -208,11 +224,11 @@ apps/extension
 
 - `runtime/source/`: safe-name copies загруженных source files.
 - `runtime/tmp/`: multer uploads, generated WAV files и Whisper output folders.
-- `runtime/output/`: legacy `history.json` для одноразовой миграции старых записей.
-- `runtime/artifacts/`: Markdown, screenshots и trash screenshots для записей истории; удаление истории удаляет папку `runtime/artifacts/<transcription-id>/`.
+- `runtime/output/`: legacy-каталог; новые транскрипты здесь не сохраняются.
+- `runtime/artifacts/`: Markdown, screenshots и trash screenshots для видео по `runtime/artifacts/<video-id>/`.
 - `runtime/downloads/`: скачанные YouTube videos.
 - `runtime/compressed/`: сжатые локальные video files.
-- `runtime/obsidian/`: Obsidian-ready transcript vault folders со скриншотами и metadata.
+- `runtime/obsidian/`: legacy Obsidian-ready transcript vault folders со скриншотами и metadata.
 
 Из этих директорий в git должны попадать только `.gitkeep` files.
 
@@ -221,7 +237,7 @@ apps/extension
 ### URL transcription
 
 ```txt
-CRM или extension
+CRM root Transcribator
   -> packages/api-client
   -> POST /transcribe/url
   -> shared Zod validation
@@ -230,12 +246,10 @@ CRM или extension
   -> yt-dlp stdout
   -> ffmpeg stdin/stdout
   -> selected transcription engine
-  -> postProcessTranscript + summarizeTranscript
-  -> runtime/output/<timestamp>.txt
-  -> optional runtime/obsidian/<videoHash>/transcript.md
-  -> runtime/output/history.json
+  -> postProcessTranscript
+  -> optional runtime/artifacts/<job-id>/screenshots/
   -> SSE progress/done events
-  -> CRM result panes и history
+  -> CRM result panes without saved history row
 ```
 
 ### File transcription
@@ -251,24 +265,9 @@ CRM multipart upload
   -> pipeline.transcribeFile
   -> ffmpeg conversion
   -> selected transcription engine
-  -> runtime/output/<timestamp>.txt
-  -> optional runtime/obsidian/<videoHash>/transcript.md
-  -> runtime/output/history.json
+  -> postProcessTranscript
+  -> optional runtime/artifacts/<job-id>/screenshots/
   -> SSE progress/done events
-```
-
-### Obsidian export для транскрибации
-
-```txt
-Transcription request with screenshotsEnabled=true
-  -> shared Zod validation for screenshotsEnabled and screenshotIntervalSeconds
-  -> pipeline.finalizeTranscript
-  -> obsidianNotes.createObsidianVault
-  -> runtime/obsidian/<videoHash>/
-  -> screenshots/0001-00-00-30.jpg
-  -> transcript.md with ![[screenshots/file.jpg]] embeds
-  -> metadata.json with future AI selection placeholders
-  -> result/history markdownPath, obsidianFolderPath, screenshotsCount
 ```
 
 ### Video download
@@ -286,7 +285,7 @@ CRM video URL
   -> runtime/downloads/<safe_title-formatId>.<ext>
 ```
 
-### YouTube video backlog
+### YouTube video backlog and transcription
 
 ```txt
 YouTube watch/shorts/live page
@@ -311,6 +310,15 @@ YouTube watch/shorts/live page
   -> cache metadata fields and raw metadata JSON in SQLite
   -> render title, channel, duration, upload date, stats, tags, categories, description and formats
   -> POST /videos/library/:id/metadata refreshes cached metadata on demand
+  -> POST /videos/library/:id/transcribe
+  -> videoTranscriptionService marks youtube_videos.status = processing
+  -> jobs.createJob
+  -> pipeline.transcribeUrl with artifactId = video.id
+  -> optional runtime/artifacts/<video-id>/screenshots/
+  -> videoLibrary saves rawText, cleanText, formattedText, summary, engine, timestamps, screenshots JSON and status
+  -> CRM listens to /jobs/:id/events and reloads /videos/library/:id after done/error
+  -> PATCH /videos/library/:id/transcript updates editable transcript fields
+  -> POST /videos/library/:id/markdown writes runtime/artifacts/<video-id>/transcript.md
 ```
 
 ### Video compression
@@ -321,27 +329,13 @@ CRM local video file
   -> POST /videos/compress
   -> shared Zod validation for preset
   -> multer temp upload
-  -> jobs.createJob with persistHistory: false
+  -> jobs.createJob
   -> videoCompression.compressVideo
   -> ffprobe duration and dimension metadata
   -> ffmpeg Apple VideoToolbox HEVC/H.265 + AAC compression
   -> runtime/compressed/<safe_original_name-preset-compressed-timestamp>.mp4
   -> SSE progress/done events через /jobs/:id/events
   -> CRM progress, output path и size savings
-```
-
-### History deletion
-
-```txt
-CRM history list или detail
-  -> window.confirm
-  -> packages/api-client
-  -> DELETE /transcribe/history/:id
-  -> historyDetailsService.deleteEntry
-  -> SQLite transcriptions row delete with screenshots cascade
-  -> remove runtime/artifacts/<transcription-id>/
-  -> keep runtime/source/ files untouched
-  -> CRM refreshes history list or returns from detail to /history
 ```
 
 ## Generated и локальные файлы

@@ -28,7 +28,6 @@ import type {
   TranscriptFinalizeMeta,
   TranscriptionOptions
 } from './types.js';
-import { defaultTranscriptionStore } from './transcriptionStore.js';
 import { persistTranscriptText } from './transcriptPersistence.js';
 
 const ROOT_DIR = path.resolve(process.cwd(), '../..');
@@ -376,11 +375,10 @@ async function finalizeTranscript(
   meta: TranscriptFinalizeMeta,
   options: TranscriptionOptions
 ) {
-  const transcriptionId = options.jobId || meta.videoHash || timestampForFile();
+  const transcriptionId = options.artifactId || options.jobId || meta.videoHash || timestampForFile();
   const createdAt = options.startedAt || Date.now();
   emitProgress(options, 'postprocess', 10, 'Post-processing transcript');
   const transcriptResult = persistTranscriptText({
-    store: defaultTranscriptionStore,
     transcriptionId,
     createdAt,
     rawText,
@@ -388,11 +386,11 @@ async function finalizeTranscript(
   });
 
   if (!options.screenshotsEnabled) {
-    emitProgress(options, 'postprocess', 100, 'Transcript saved to SQLite');
+    emitProgress(options, 'postprocess', 100, 'Transcript processed');
     return transcriptResult;
   }
 
-  emitProgress(options, 'postprocess', 100, 'Transcript saved to SQLite');
+  emitProgress(options, 'postprocess', 100, 'Transcript processed');
   const intervalSeconds = normalizeScreenshotIntervalSeconds(options.screenshotIntervalSeconds);
   const screenshotsResult = await createScreenshotArtifacts({
     transcriptionId,
@@ -403,14 +401,15 @@ async function finalizeTranscript(
     sourceUrl: meta.sourceUrl,
     onProgress: options.onProgress
   });
-  defaultTranscriptionStore.addScreenshots(transcriptionId, screenshotsResult.screenshots.map((screenshot) => ({
-    fileName: screenshot.fileName,
-    timestampSeconds: screenshot.timestampSeconds,
-    path: path.join(screenshotsResult.screenshotsDir, screenshot.fileName)
-  })));
 
   return {
     ...transcriptResult,
+    screenshots: screenshotsResult.screenshots.map((screenshot) => ({
+      fileName: screenshot.fileName,
+      timestampSeconds: screenshot.timestampSeconds,
+      exists: true,
+      url: `/videos/library/${encodeURIComponent(transcriptionId)}/screenshots/active/${encodeURIComponent(screenshot.fileName)}`
+    })),
     screenshotsCount: screenshotsResult.screenshotsCount
   };
 }

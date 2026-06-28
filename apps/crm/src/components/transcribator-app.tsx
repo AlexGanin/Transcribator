@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import {
   ArrowLeft,
@@ -29,15 +28,12 @@ import {
 import { ApiClientError, createApiClient } from '@transcribator/api-client';
 import {
   progressEventSchema,
-  type HistoryDetailResponse,
-  type HistoryEntry,
-  type HistoryScreenshot,
   type ProgressEvent,
   type TranscriptionEngine,
-  type UpdateHistoryEntryRequest,
   type VideoCompressionPreset,
   type VideoCompressionResult,
   type VideoFormat,
+  type VideoScreenshot,
   type YouTubeVideo
 } from '@transcribator/shared';
 import {
@@ -58,12 +54,10 @@ import {
   cn
 } from '@transcribator/ui';
 import {
-  buildHistoryDetailPath,
   buildVideoDetailPath,
   crmNavigationItems,
   type AppView
 } from './crm-navigation';
-import { buildHistoryDeleteConfirmationMessage } from './history-delete';
 import {
   chooseNextLightboxIndex,
   getRestoredLightboxIndex,
@@ -71,7 +65,7 @@ import {
   isLightboxDeleteKey,
   isLightboxUndoKey,
   type LightboxDirection
-} from './history-lightbox-navigation';
+} from './screenshot-lightbox-navigation';
 import { buildCleanTranscriptClipboardText } from './transcript-clipboard';
 import {
   ALL_YOUTUBE_CHANNELS_ID,
@@ -127,7 +121,7 @@ type SourceMode = 'url' | 'file';
 type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
 type ScreenshotScope = 'active' | 'trash';
-type HistoryAction = '' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown' | 'delete';
+type VideoAction = '' | 'transcribe' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown' | 'save';
 type CopyStatus = 'idle' | 'copied';
 
 interface StageState {
@@ -141,10 +135,7 @@ interface StageState {
   indeterminate: boolean;
 }
 
-interface HistoryEditForm {
-  title: string;
-  source: string;
-  engine: string;
+interface VideoTranscriptForm {
   summary: string;
   formattedText: string;
   cleanText: string;
@@ -157,18 +148,16 @@ interface LightboxState {
 }
 
 interface LastLightboxTrash {
-  entryId: string;
+  videoId: string;
   fileName: string;
 }
 
 interface TranscribatorAppProps {
   view?: AppView;
-  historyEntryId?: string;
   videoId?: string;
 }
 
-export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId }: TranscribatorAppProps) {
-  const router = useRouter();
+export function TranscribatorApp({ view = 'transcribe', videoId }: TranscribatorAppProps) {
   const api = React.useMemo(() => createApiClient({ baseUrl: API_BASE_URL }), []);
   const [sourceMode, setSourceMode] = React.useState<SourceMode>('url');
   const [url, setUrl] = React.useState('');
@@ -185,14 +174,6 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
   const [screenshotsEnabled, setScreenshotsEnabled] = React.useState(false);
   const [screenshotIntervalSeconds, setScreenshotIntervalSeconds] = React.useState(30);
   const [stages, setStages] = React.useState<StageState[]>([]);
-  const [history, setHistory] = React.useState<HistoryEntry[]>([]);
-  const [historyDetail, setHistoryDetail] = React.useState<HistoryDetailResponse | null>(null);
-  const [historyForm, setHistoryForm] = React.useState<HistoryEditForm>(createHistoryEditForm());
-  const [historyLoading, setHistoryLoading] = React.useState(false);
-  const [historySaving, setHistorySaving] = React.useState(false);
-  const [historyAction, setHistoryAction] = React.useState<HistoryAction>('');
-  const [historyError, setHistoryError] = React.useState('');
-  const [deletingHistoryId, setDeletingHistoryId] = React.useState('');
   const [cleanTranscriptCopyStatus, setCleanTranscriptCopyStatus] = React.useState<CopyStatus>('idle');
   const [selectedActiveScreenshots, setSelectedActiveScreenshots] = React.useState<string[]>([]);
   const [selectedTrashedScreenshots, setSelectedTrashedScreenshots] = React.useState<string[]>([]);
@@ -215,6 +196,13 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
   const [youtubeVideoDetailRefreshing, setYoutubeVideoDetailRefreshing] = React.useState(false);
   const [youtubeVideoDetailError, setYoutubeVideoDetailError] = React.useState('');
   const [youtubeVideoMetadataError, setYoutubeVideoMetadataError] = React.useState('');
+  const [youtubeVideoAction, setYoutubeVideoAction] = React.useState<VideoAction>('');
+  const [youtubeVideoTranscriptForm, setYoutubeVideoTranscriptForm] = React.useState<VideoTranscriptForm>(createVideoTranscriptForm());
+  const [youtubeVideoTranscriptionStages, setYoutubeVideoTranscriptionStages] = React.useState<StageState[]>([]);
+  const [youtubeVideoTranscriptionStatus, setYoutubeVideoTranscriptionStatus] = React.useState<RunStatus>('idle');
+  const [youtubeVideoTranscriptionElapsedSeconds, setYoutubeVideoTranscriptionElapsedSeconds] = React.useState(0);
+  const [youtubeVideoScreenshotsEnabled, setYoutubeVideoScreenshotsEnabled] = React.useState(true);
+  const [youtubeVideoScreenshotIntervalSeconds, setYoutubeVideoScreenshotIntervalSeconds] = React.useState(30);
   const [compressionFile, setCompressionFile] = React.useState<File | null>(null);
   const [compressionPreset, setCompressionPreset] = React.useState<VideoCompressionPreset>('balanced');
   const [compressionStatus, setCompressionStatus] = React.useState<RunStatus>('idle');
@@ -223,8 +211,10 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
   const [compressionElapsedSeconds, setCompressionElapsedSeconds] = React.useState(0);
   const [compressionResult, setCompressionResult] = React.useState<VideoCompressionResult | null>(null);
   const startedAtRef = React.useRef<number>(Date.now());
+  const youtubeVideoTranscriptionStartedAtRef = React.useRef<number>(Date.now());
   const compressionStartedAtRef = React.useRef<number>(Date.now());
   const eventSourceRef = React.useRef<EventSource | null>(null);
+  const youtubeVideoEventSourceRef = React.useRef<EventSource | null>(null);
   const compressionEventSourceRef = React.useRef<EventSource | null>(null);
   const lightboxDeleteInFlightRef = React.useRef(false);
   const cleanTranscriptCopyTimerRef = React.useRef<number | null>(null);
@@ -235,10 +225,9 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
   );
 
   React.useEffect(() => {
-    void loadHistory();
-
     return () => {
       eventSourceRef.current?.close();
+      youtubeVideoEventSourceRef.current?.close();
       compressionEventSourceRef.current?.close();
       if (cleanTranscriptCopyTimerRef.current !== null) {
         window.clearTimeout(cleanTranscriptCopyTimerRef.current);
@@ -285,6 +274,28 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
       void loadYouTubeVideoDetail(videoId, { showLoading: true, showError: true });
     }
   }, [view, videoId]);
+
+  React.useEffect(() => {
+    if (youtubeVideoTranscriptionStatus !== 'running') return undefined;
+
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setYoutubeVideoTranscriptionElapsedSeconds(Math.floor((now - youtubeVideoTranscriptionStartedAtRef.current) / 1000));
+      setYoutubeVideoTranscriptionStages((currentStages) =>
+        currentStages.map((stage) => {
+          if (stage.status !== 'running' || stage.startedAt === null) return stage;
+
+          return {
+            ...stage,
+            elapsedSeconds: Math.floor((now - stage.startedAt) / 1000),
+            progress: stage.indeterminate ? Math.min(95, stage.progress + 1) : stage.progress
+          };
+        })
+      );
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [youtubeVideoTranscriptionStatus]);
 
   React.useEffect(() => {
     if (compressionStatus !== 'running') return undefined;
@@ -340,28 +351,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [historyDetail, historyAction, lastLightboxTrash, lightbox]);
-
-  React.useEffect(() => {
-    if (view !== 'history') {
-      setHistoryError('');
-      setLightbox(null);
-      setLastLightboxTrash(null);
-      return;
-    }
-
-    if (historyEntryId) {
-      void openHistoryDetail(historyEntryId);
-      return;
-    }
-
-    setHistoryDetail(null);
-    setHistoryError('');
-    setSelectedActiveScreenshots([]);
-    setSelectedTrashedScreenshots([]);
-    setLightbox(null);
-    setLastLightboxTrash(null);
-  }, [view, historyEntryId]);
+  }, [youtubeVideoDetail, youtubeVideoAction, lastLightboxTrash, lightbox]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -428,7 +418,6 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
         setMarkdownPath(event.result?.markdownPath || '');
         setScreenshotsCount(event.result?.screenshotsCount || 0);
         finishRun('done');
-        void loadHistory();
         eventSourceRef.current = null;
         eventSource.close();
       }
@@ -436,7 +425,6 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
       if (event.type === 'error') {
         finishRun('error');
         setError(event.error || 'Transcription failed.');
-        void loadHistory();
         eventSourceRef.current = null;
         eventSource.close();
       }
@@ -504,29 +492,6 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
     setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
   }
 
-  async function loadHistory(options: { showLoading?: boolean; showError?: boolean } = {}) {
-    if (options.showLoading) {
-      setHistoryLoading(true);
-    }
-    if (options.showError) {
-      setHistoryError('');
-    }
-
-    try {
-      const response = await api.getHistory();
-      setHistory(response.history || []);
-    } catch (caught) {
-      setHistory([]);
-      if (options.showError) {
-        setHistoryError(errorMessage(caught, 'Не удалось загрузить историю.'));
-      }
-    } finally {
-      if (options.showLoading) {
-        setHistoryLoading(false);
-      }
-    }
-  }
-
   async function loadYouTubeVideos(options: { showLoading?: boolean; showError?: boolean } = {}) {
     if (options.showLoading) {
       setYoutubeVideosLoading(true);
@@ -562,6 +527,11 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
     try {
       const response = await api.getYouTubeVideo(id);
       setYoutubeVideoDetail(response.video);
+      setYoutubeVideoTranscriptForm(createVideoTranscriptForm(response.video));
+      setSelectedActiveScreenshots([]);
+      setSelectedTrashedScreenshots([]);
+      setLightbox(null);
+      setLastLightboxTrash(null);
       setYoutubeVideoMetadataError(response.metadataError || '');
     } catch (caught) {
       setYoutubeVideoDetail(null);
@@ -583,6 +553,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
     try {
       const response = await api.refreshYouTubeVideoMetadata(id);
       setYoutubeVideoDetail(response.video);
+      setYoutubeVideoTranscriptForm(createVideoTranscriptForm(response.video));
       setYoutubeVideoMetadataError(response.metadataError || '');
     } catch (caught) {
       setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось обновить метаданные.'));
@@ -591,182 +562,266 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
     }
   }
 
-  async function openHistoryDetail(id: string) {
-    setHistoryLoading(true);
-    setHistoryError('');
-    setHistoryDetail(null);
-
-    try {
-      applyHistoryDetail(await api.getHistoryEntry(id));
-    } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось открыть запись истории.'));
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  function applyHistoryDetail(detail: HistoryDetailResponse) {
-    setHistoryDetail(detail);
-    setHistoryForm(createHistoryEditForm(detail.entry));
+  function applyYouTubeVideo(video: YouTubeVideo) {
+    setYoutubeVideoDetail(video);
+    setYoutubeVideoTranscriptForm(createVideoTranscriptForm(video));
     setSelectedActiveScreenshots([]);
     setSelectedTrashedScreenshots([]);
     setLightbox(null);
   }
 
-  function closeHistoryDetail() {
-    setHistoryDetail(null);
-    setHistoryError('');
-    setSelectedActiveScreenshots([]);
-    setSelectedTrashedScreenshots([]);
-    setLightbox(null);
-    setLastLightboxTrash(null);
-    router.push('/history');
-  }
+  async function saveYouTubeVideoTranscript() {
+    if (!youtubeVideoDetail) return;
 
-  async function saveHistoryDetail() {
-    if (!historyDetail) return;
-
-    setHistorySaving(true);
-    setHistoryError('');
+    setYoutubeVideoAction('save');
+    setYoutubeVideoDetailError('');
 
     try {
-      const patch: UpdateHistoryEntryRequest = {
-        title: historyForm.title,
-        source: historyForm.source,
-        engine: historyForm.engine,
-        summary: historyForm.summary,
-        formattedText: historyForm.formattedText,
-        cleanText: historyForm.cleanText,
-        rawText: historyForm.rawText
-      };
-      applyHistoryDetail(await api.updateHistoryEntry(historyDetail.entry.id, patch));
-      await loadHistory();
+      const response = await api.updateYouTubeVideoTranscript(youtubeVideoDetail.id, youtubeVideoTranscriptForm);
+      applyYouTubeVideo(response.video);
+      await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось сохранить изменения.'));
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось сохранить транскрипт.'));
     } finally {
-      setHistorySaving(false);
+      setYoutubeVideoAction('');
     }
   }
 
-  async function deleteHistoryEntry(entry: HistoryEntry) {
-    const confirmed = window.confirm(buildHistoryDeleteConfirmationMessage(entry));
-    if (!confirmed) return;
-
-    setDeletingHistoryId(entry.id);
-    setHistoryAction('delete');
-    setHistoryError('');
+  async function startYouTubeVideoTranscription(video: YouTubeVideo) {
+    youtubeVideoEventSourceRef.current?.close();
+    youtubeVideoTranscriptionStartedAtRef.current = Date.now();
+    setYoutubeVideoTranscriptionStatus('running');
+    setYoutubeVideoTranscriptionElapsedSeconds(0);
+    setYoutubeVideoTranscriptionStages(createStages(buildTranscriptionStages(false, youtubeVideoScreenshotsEnabled)));
+    setYoutubeVideoAction('transcribe');
+    setYoutubeVideoDetailError('');
 
     try {
-      await api.deleteHistoryEntry(entry.id);
-      setHistory((current) => current.filter((item) => item.id !== entry.id));
-
-      if (historyDetail?.entry.id === entry.id) {
-        setHistoryDetail(null);
-        setHistoryForm(createHistoryEditForm());
-        setSelectedActiveScreenshots([]);
-        setSelectedTrashedScreenshots([]);
-        setLightbox(null);
-        setLastLightboxTrash(null);
-        router.push('/history');
-      } else {
-        await loadHistory();
-      }
+      const response = await api.transcribeYouTubeVideo(video.id, {
+        engine,
+        screenshotsEnabled: youtubeVideoScreenshotsEnabled,
+        screenshotIntervalSeconds: youtubeVideoScreenshotIntervalSeconds
+      });
+      applyYouTubeVideo(response.video);
+      setYoutubeVideos((current) => current.map((item) => item.id === response.video.id ? response.video : item));
+      subscribeToYouTubeVideoJob(response.jobId, response.video.id);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось удалить запись истории.'));
+      finishYouTubeVideoTranscriptionRun('error');
+      setYoutubeVideoAction('');
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось запустить транскрибацию видео.'));
+    }
+  }
+
+  async function formatYouTubeVideoTranscript() {
+    if (!youtubeVideoDetail) return;
+
+    setYoutubeVideoAction('format');
+    setYoutubeVideoDetailError('');
+
+    try {
+      const response = await api.formatYouTubeVideoTranscript(youtubeVideoDetail.id);
+      applyYouTubeVideo(response.video);
+      await refreshVideoListAfterDetailChange(response.video);
+    } catch (caught) {
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось выполнить нейроформатирование.'));
     } finally {
-      setDeletingHistoryId('');
-      setHistoryAction('');
+      setYoutubeVideoAction('');
+    }
+  }
+
+  async function createYouTubeVideoMarkdown() {
+    if (!youtubeVideoDetail) return;
+
+    setYoutubeVideoAction('markdown');
+    setYoutubeVideoDetailError('');
+
+    try {
+      const response = await api.createYouTubeVideoMarkdown(youtubeVideoDetail.id);
+      applyYouTubeVideo(response.video);
+      await refreshVideoListAfterDetailChange(response.video);
+    } catch (caught) {
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось создать Markdown.'));
+    } finally {
+      setYoutubeVideoAction('');
     }
   }
 
   async function trashSelectedScreenshots() {
-    if (!historyDetail || selectedActiveScreenshots.length === 0) return;
+    if (!youtubeVideoDetail || selectedActiveScreenshots.length === 0) return;
 
-    setHistoryAction('trash');
-    setHistoryError('');
-
-    try {
-      applyHistoryDetail(await api.trashHistoryScreenshots(historyDetail.entry.id, selectedActiveScreenshots));
-      await loadHistory();
-    } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось перенести скриншоты в корзину.'));
-    } finally {
-      setHistoryAction('');
-    }
-  }
-
-  async function formatHistoryDetail() {
-    if (!historyDetail) return;
-
-    setHistoryAction('format');
-    setHistoryError('');
+    setYoutubeVideoAction('trash');
+    setYoutubeVideoDetailError('');
 
     try {
-      applyHistoryDetail(await api.formatHistoryEntry(historyDetail.entry.id));
-      await loadHistory();
+      const response = await api.trashYouTubeVideoScreenshots(youtubeVideoDetail.id, selectedActiveScreenshots);
+      applyYouTubeVideo(response.video);
+      await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось выполнить нейроформатирование.'));
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось перенести скриншоты в корзину.'));
     } finally {
-      setHistoryAction('');
-    }
-  }
-
-  async function createHistoryMarkdown() {
-    if (!historyDetail) return;
-
-    setHistoryAction('markdown');
-    setHistoryError('');
-
-    try {
-      applyHistoryDetail(await api.createHistoryMarkdown(historyDetail.entry.id));
-      await loadHistory();
-    } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось создать Markdown.'));
-    } finally {
-      setHistoryAction('');
+      setYoutubeVideoAction('');
     }
   }
 
   async function restoreSelectedScreenshots() {
-    if (!historyDetail || selectedTrashedScreenshots.length === 0) return;
+    if (!youtubeVideoDetail || selectedTrashedScreenshots.length === 0) return;
 
-    setHistoryAction('restore');
-    setHistoryError('');
+    setYoutubeVideoAction('restore');
+    setYoutubeVideoDetailError('');
 
     try {
-      applyHistoryDetail(await api.restoreHistoryScreenshots(historyDetail.entry.id, selectedTrashedScreenshots));
+      const response = await api.restoreYouTubeVideoScreenshots(youtubeVideoDetail.id, selectedTrashedScreenshots);
+      applyYouTubeVideo(response.video);
       if (lastLightboxTrash && selectedTrashedScreenshots.includes(lastLightboxTrash.fileName)) {
         setLastLightboxTrash(null);
       }
-      await loadHistory();
+      await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось восстановить скриншоты.'));
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось восстановить скриншоты.'));
     } finally {
-      setHistoryAction('');
+      setYoutubeVideoAction('');
     }
   }
 
   async function clearScreenshotsTrash() {
-    if (!historyDetail || historyDetail.trashedScreenshots.length === 0) return;
+    if (!youtubeVideoDetail || youtubeVideoDetail.trashedScreenshots.length === 0) return;
     const confirmed = window.confirm('Окончательно удалить все скриншоты из корзины? Это действие нельзя отменить.');
     if (!confirmed) return;
 
-    setHistoryAction('clear');
-    setHistoryError('');
+    setYoutubeVideoAction('clear');
+    setYoutubeVideoDetailError('');
 
     try {
-      applyHistoryDetail(await api.clearHistoryScreenshotsTrash(historyDetail.entry.id));
+      const response = await api.clearYouTubeVideoScreenshotsTrash(youtubeVideoDetail.id);
+      applyYouTubeVideo(response.video);
       setLastLightboxTrash(null);
-      await loadHistory();
+      await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось очистить корзину.'));
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось очистить корзину.'));
     } finally {
-      setHistoryAction('');
+      setYoutubeVideoAction('');
     }
   }
 
-  function updateHistoryForm<K extends keyof HistoryEditForm>(key: K, value: HistoryEditForm[K]) {
-    setHistoryForm((current) => ({ ...current, [key]: value }));
+  function subscribeToYouTubeVideoJob(jobId: string, detailVideoId: string) {
+    const eventSource = new EventSource(api.jobEventsUrl(jobId));
+    youtubeVideoEventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (message) => {
+      const event = parseProgressEvent(message.data);
+      if (!event) return;
+
+      if (event.type === 'progress') {
+        updateYouTubeVideoTranscriptionStage(
+          event.stage,
+          event.progress,
+          event.progress >= 100 ? 'done' : 'running',
+          event.stage === 'transcribe'
+        );
+      }
+
+      if (event.type === 'done') {
+        completeYouTubeVideoTranscriptionStages();
+        finishYouTubeVideoTranscriptionRun('done');
+        setYoutubeVideoAction('');
+        void reloadYouTubeVideoAfterJob(detailVideoId);
+        youtubeVideoEventSourceRef.current = null;
+        eventSource.close();
+      }
+
+      if (event.type === 'error') {
+        finishYouTubeVideoTranscriptionRun('error');
+        setYoutubeVideoAction('');
+        setYoutubeVideoDetailError(event.error || 'Не удалось транскрибировать видео.');
+        void reloadYouTubeVideoAfterJob(detailVideoId);
+        youtubeVideoEventSourceRef.current = null;
+        eventSource.close();
+      }
+    };
+
+    eventSource.onerror = () => {
+      if (youtubeVideoEventSourceRef.current === eventSource) {
+        finishYouTubeVideoTranscriptionRun('error');
+        setYoutubeVideoAction('');
+        setYoutubeVideoDetailError('Потеряно соединение с потоком прогресса транскрибации видео.');
+        youtubeVideoEventSourceRef.current = null;
+      }
+      eventSource.close();
+    };
+  }
+
+  function updateYouTubeVideoTranscriptionStage(
+    stageId: string,
+    progress: number,
+    nextStatus: StageStatus,
+    indeterminate: boolean
+  ) {
+    const now = Date.now();
+
+    setYoutubeVideoTranscriptionStages((currentStages) =>
+      currentStages.map((stage) => {
+        if (stage.id !== stageId) return stage;
+
+        const startedAt = stage.startedAt || now;
+        const isDone = nextStatus === 'done' || progress >= 100;
+        const finishedAt = isDone ? stage.finishedAt || now : null;
+
+        return {
+          ...stage,
+          status: isDone ? 'done' : nextStatus,
+          progress: Math.max(stage.progress, Math.min(100, progress)),
+          indeterminate: Boolean(indeterminate && !isDone),
+          startedAt,
+          finishedAt,
+          elapsedSeconds: Math.floor(((finishedAt || now) - startedAt) / 1000)
+        };
+      })
+    );
+  }
+
+  function completeYouTubeVideoTranscriptionStages() {
+    const now = Date.now();
+    setYoutubeVideoTranscriptionStages((currentStages) =>
+      currentStages.map((stage) => {
+        const startedAt = stage.startedAt || now;
+        const finishedAt = stage.finishedAt || now;
+        return {
+          ...stage,
+          status: 'done',
+          progress: 100,
+          indeterminate: false,
+          startedAt,
+          finishedAt,
+          elapsedSeconds: Math.floor((finishedAt - startedAt) / 1000)
+        };
+      })
+    );
+  }
+
+  function finishYouTubeVideoTranscriptionRun(nextStatus: Exclude<RunStatus, 'idle' | 'running'>) {
+    setYoutubeVideoTranscriptionStatus(nextStatus);
+    setYoutubeVideoTranscriptionElapsedSeconds(Math.floor((Date.now() - youtubeVideoTranscriptionStartedAtRef.current) / 1000));
+  }
+
+  async function reloadYouTubeVideoAfterJob(id: string) {
+    try {
+      const response = await api.getYouTubeVideo(id);
+      applyYouTubeVideo(response.video);
+      await refreshVideoListAfterDetailChange(response.video);
+    } catch (caught) {
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось обновить видео после транскрибации.'));
+    }
+  }
+
+  async function refreshVideoListAfterDetailChange(video: YouTubeVideo) {
+    setYoutubeVideos((current) => current.map((item) => item.id === video.id ? video : item));
+    if (view === 'videos') {
+      await loadYouTubeVideos();
+    }
+  }
+
+  function updateVideoTranscriptForm<K extends keyof VideoTranscriptForm>(key: K, value: VideoTranscriptForm[K]) {
+    setYoutubeVideoTranscriptForm((current) => ({ ...current, [key]: value }));
   }
 
   async function copyCleanTranscript(value: string) {
@@ -797,10 +852,10 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
     setSelectedTrashedScreenshots((current) => toggleSelection(current, fileName, checked));
   }
 
-  function openLightbox(scope: ScreenshotScope, screenshot: HistoryScreenshot) {
-    if (!historyDetail) return;
+  function openLightbox(scope: ScreenshotScope, screenshot: VideoScreenshot) {
+    if (!youtubeVideoDetail) return;
 
-    const screenshots = screenshotsForScope(historyDetail, scope);
+    const screenshots = screenshotsForScope(youtubeVideoDetail, scope);
     const index = screenshots.findIndex((item) => item.fileName === screenshot.fileName);
     if (index < 0) return;
 
@@ -809,64 +864,64 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
 
   function navigateLightbox(direction: LightboxDirection) {
     setLightbox((current) => {
-      if (!current || !historyDetail) return current;
+      if (!current || !youtubeVideoDetail) return current;
 
-      const screenshots = screenshotsForScope(historyDetail, current.scope);
+      const screenshots = screenshotsForScope(youtubeVideoDetail, current.scope);
       const nextIndex = getAdjacentLightboxIndex(current.index, screenshots.length, direction);
       return nextIndex === null ? null : { ...current, index: nextIndex };
     });
   }
 
   async function trashLightboxScreenshot() {
-    if (!historyDetail || !lightbox || lightbox.scope !== 'active' || lightboxDeleteInFlightRef.current) return;
+    if (!youtubeVideoDetail || !lightbox || lightbox.scope !== 'active' || lightboxDeleteInFlightRef.current) return;
 
-    const screenshot = getLightboxScreenshot(historyDetail, lightbox);
+    const screenshot = getLightboxScreenshot(youtubeVideoDetail, lightbox);
     if (!screenshot) return;
 
-    const nextIndex = chooseNextLightboxIndex(lightbox.index, historyDetail.screenshots.length);
+    const nextIndex = chooseNextLightboxIndex(lightbox.index, youtubeVideoDetail.screenshots.length);
     lightboxDeleteInFlightRef.current = true;
-    setHistoryAction('trash');
-    setHistoryError('');
+    setYoutubeVideoAction('trash');
+    setYoutubeVideoDetailError('');
 
     try {
-      const nextDetail = await api.trashHistoryScreenshots(historyDetail.entry.id, [screenshot.fileName]);
-      setLastLightboxTrash({ entryId: historyDetail.entry.id, fileName: screenshot.fileName });
-      applyHistoryDetail(nextDetail);
-      const nextScreenshots = screenshotsForScope(nextDetail, 'active');
+      const response = await api.trashYouTubeVideoScreenshots(youtubeVideoDetail.id, [screenshot.fileName]);
+      setLastLightboxTrash({ videoId: youtubeVideoDetail.id, fileName: screenshot.fileName });
+      applyYouTubeVideo(response.video);
+      const nextScreenshots = screenshotsForScope(response.video, 'active');
       setLightbox(nextIndex === null || !nextScreenshots[nextIndex] ? null : { scope: 'active', index: nextIndex });
-      await loadHistory();
+      await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось перенести скриншот в корзину.'));
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось перенести скриншот в корзину.'));
     } finally {
       lightboxDeleteInFlightRef.current = false;
-      setHistoryAction('');
+      setYoutubeVideoAction('');
     }
   }
 
   async function restoreLastLightboxScreenshot() {
     if (
-      !historyDetail ||
+      !youtubeVideoDetail ||
       !lastLightboxTrash ||
-      lastLightboxTrash.entryId !== historyDetail.entry.id ||
-      historyAction === 'restore'
+      lastLightboxTrash.videoId !== youtubeVideoDetail.id ||
+      youtubeVideoAction === 'restore'
     ) {
       return;
     }
 
-    setHistoryAction('restore');
-    setHistoryError('');
+    setYoutubeVideoAction('restore');
+    setYoutubeVideoDetailError('');
 
     try {
-      const nextDetail = await api.restoreHistoryScreenshots(historyDetail.entry.id, [lastLightboxTrash.fileName]);
-      applyHistoryDetail(nextDetail);
-      const restoredIndex = getRestoredLightboxIndex(nextDetail.screenshots, lastLightboxTrash.fileName);
+      const response = await api.restoreYouTubeVideoScreenshots(youtubeVideoDetail.id, [lastLightboxTrash.fileName]);
+      applyYouTubeVideo(response.video);
+      const restoredIndex = getRestoredLightboxIndex(response.video.screenshots, lastLightboxTrash.fileName);
       setLastLightboxTrash(null);
       setLightbox(restoredIndex === null ? null : { scope: 'active', index: restoredIndex });
-      await loadHistory();
+      await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
-      setHistoryError(errorMessage(caught, 'Не удалось вернуть последний скриншот.'));
+      setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось вернуть последний скриншот.'));
     } finally {
-      setHistoryAction('');
+      setYoutubeVideoAction('');
     }
   }
 
@@ -1043,15 +1098,15 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
     ? compressionStatus
     : view === 'download'
       ? normalizeVideoStatus(videoStatus)
-      : view === 'history'
-        ? 'idle'
+      : view === 'videoDetail' && youtubeVideoTranscriptionStatus !== 'idle'
+        ? youtubeVideoTranscriptionStatus
         : status;
-  const lightboxScreenshot = historyDetail && lightbox ? getLightboxScreenshot(historyDetail, lightbox) : null;
-  const lightboxTotalItems = historyDetail && lightbox ? screenshotsForScope(historyDetail, lightbox.scope).length : 0;
+  const lightboxScreenshot = youtubeVideoDetail && lightbox ? getLightboxScreenshot(youtubeVideoDetail, lightbox) : null;
+  const lightboxTotalItems = youtubeVideoDetail && lightbox ? screenshotsForScope(youtubeVideoDetail, lightbox.scope).length : 0;
   const canUndoLightboxTrash = Boolean(
-    historyDetail &&
+    youtubeVideoDetail &&
     lastLightboxTrash &&
-    lastLightboxTrash.entryId === historyDetail.entry.id
+    lastLightboxTrash.videoId === youtubeVideoDetail.id
   );
 
   return (
@@ -1170,8 +1225,22 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
                           <Badge variant="secondary">{formatYouTubeVideoStatus(video.status)}</Badge>
                         </div>
                         {(video.channelTitle || video.uploader) && <p className="text-sm text-neutral-600">{video.channelTitle || video.uploader}</p>}
-                        <p className="text-xs text-neutral-500">Добавлено: {formatHistoryDate(video.createdAt)}</p>
+                        <p className="text-xs text-neutral-500">Добавлено: {formatDateTime(video.createdAt)}</p>
+                        <p className="text-sm text-neutral-700">{formatTranscriptAvailability(video)}</p>
+                        {video.transcriptionError && (
+                          <p className="text-sm font-medium text-red-700">{previewText(video.transcriptionError, 140)}</p>
+                        )}
                         <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant={video.status === 'done' ? 'secondary' : 'default'}
+                            className="w-fit"
+                            onClick={() => void startYouTubeVideoTranscription(video)}
+                            disabled={video.status === 'processing' || youtubeVideoAction === 'transcribe'}
+                          >
+                            <Play className="h-4 w-4" />
+                            {video.status === 'processing' ? 'В работе' : video.status === 'done' ? 'Транскрибировать заново' : 'Транскрибировать'}
+                          </Button>
                           <Button asChild className="w-fit">
                             <Link href={buildVideoDetailPath(video.id)}>
                               Подробнее
@@ -1253,9 +1322,92 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
                           Открыть YouTube
                         </a>
                       </Button>
+                      <Button
+                        type="button"
+                        className="w-fit"
+                        onClick={() => void startYouTubeVideoTranscription(youtubeVideoDetail)}
+                        disabled={youtubeVideoDetail.status === 'processing' || youtubeVideoAction === 'transcribe'}
+                      >
+                        <Play className="h-4 w-4" />
+                        {youtubeVideoDetail.status === 'processing' ? 'В работе' : youtubeVideoDetail.status === 'done' ? 'Транскрибировать заново' : 'Транскрибировать'}
+                      </Button>
                     </div>
                   </div>
                 </article>
+
+                <section className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px] md:items-end">
+                    <label className="grid gap-2 text-sm font-medium">
+                      Transcription engine
+                      <Select
+                        value={engine}
+                        onValueChange={(value) => setEngine(value as TranscriptionEngine)}
+                        disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing'}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TRANSCRIPTION_ENGINES.map((option) => (
+                            <SelectItem value={option.value} key={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <Button
+                      type="button"
+                      className="w-fit"
+                      onClick={() => void startYouTubeVideoTranscription(youtubeVideoDetail)}
+                      disabled={youtubeVideoDetail.status === 'processing' || youtubeVideoAction === 'transcribe'}
+                    >
+                      <Play className="h-4 w-4" />
+                      {youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing' ? 'Транскрибирую...' : 'Транскрибировать'}
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={youtubeVideoScreenshotsEnabled}
+                        onChange={(event) => setYoutubeVideoScreenshotsEnabled(event.target.checked)}
+                        disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing'}
+                        className="h-4 w-4"
+                      />
+                      <Images className="h-4 w-4" />
+                      Создавать скриншоты
+                    </label>
+
+                    <label className="grid gap-2 text-sm font-medium">
+                      Интервал скриншотов, сек
+                      <Input
+                        type="number"
+                        min={1}
+                        max={3600}
+                        step={1}
+                        value={youtubeVideoScreenshotIntervalSeconds}
+                        onChange={(event) => setYoutubeVideoScreenshotIntervalSeconds(normalizeScreenshotIntervalInput(event.target.value))}
+                        disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing' || !youtubeVideoScreenshotsEnabled}
+                      />
+                    </label>
+                  </div>
+
+                  {youtubeVideoTranscriptionStages.length > 0 && youtubeVideoTranscriptionStatus !== 'idle' && (
+                    <ProgressPanel
+                      stages={youtubeVideoTranscriptionStages}
+                      status={youtubeVideoTranscriptionStatus}
+                      elapsedSeconds={youtubeVideoTranscriptionElapsedSeconds}
+                    />
+                  )}
+
+                  {youtubeVideoDetail.transcriptionError && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                      {youtubeVideoDetail.transcriptionError}
+                    </p>
+                  )}
+                </section>
 
                 <section className="grid gap-3 md:grid-cols-2">
                   <Card>
@@ -1265,13 +1417,18 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
                     <CardContent className="grid gap-2 text-sm">
                       {renderMetaRow('ID в CRM', youtubeVideoDetail.id)}
                       {renderMetaRow('YouTube ID', youtubeVideoDetail.youtubeVideoId)}
-                      {renderMetaRow('Добавлено', formatHistoryDate(youtubeVideoDetail.createdAt))}
-                      {renderMetaRow('Обновлено', formatHistoryDate(youtubeVideoDetail.updatedAt))}
-                      {renderMetaRow('Метаданные загружены', youtubeVideoDetail.metadataFetchedAt ? formatHistoryDate(youtubeVideoDetail.metadataFetchedAt) : '')}
+                      {renderMetaRow('Добавлено', formatDateTime(youtubeVideoDetail.createdAt))}
+                      {renderMetaRow('Обновлено', formatDateTime(youtubeVideoDetail.updatedAt))}
+                      {renderMetaRow('Метаданные загружены', youtubeVideoDetail.metadataFetchedAt ? formatDateTime(youtubeVideoDetail.metadataFetchedAt) : '')}
                       {renderMetaRow('Длительность', formatVideoDuration(youtubeVideoDetail))}
                       {renderMetaRow('Дата загрузки', formatYouTubeUploadDate(youtubeVideoDetail.uploadDate))}
-                      {renderMetaRow('Timestamp публикации', youtubeVideoDetail.timestamp ? formatHistoryDate(youtubeVideoDetail.timestamp * 1000) : '')}
+                      {renderMetaRow('Timestamp публикации', youtubeVideoDetail.timestamp ? formatDateTime(youtubeVideoDetail.timestamp * 1000) : '')}
                       {renderMetaRow('Ссылка', youtubeVideoDetail.webpageUrl || youtubeVideoDetail.url)}
+                      {renderMetaRow('Транскрипт', formatTranscriptAvailability(youtubeVideoDetail))}
+                      {renderMetaRow('Job', youtubeVideoDetail.transcriptionJobId)}
+                      {renderMetaRow('Engine', youtubeVideoDetail.transcriptionEngine)}
+                      {renderMetaRow('Старт транскрибации', youtubeVideoDetail.transcriptionStartedAt ? formatDateTime(youtubeVideoDetail.transcriptionStartedAt) : '')}
+                      {renderMetaRow('Финиш транскрибации', youtubeVideoDetail.transcriptionFinishedAt ? formatDateTime(youtubeVideoDetail.transcriptionFinishedAt) : '')}
                     </CardContent>
                   </Card>
 
@@ -1337,6 +1494,26 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
                     <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-800">{youtubeVideoDetail.description || 'Нет данных'}</p>
                   </CardContent>
                 </Card>
+
+                <VideoTranscriptView
+                  video={youtubeVideoDetail}
+                  form={youtubeVideoTranscriptForm}
+                  onSave={() => void saveYouTubeVideoTranscript()}
+                  onFormat={() => void formatYouTubeVideoTranscript()}
+                  onCreateMarkdown={() => void createYouTubeVideoMarkdown()}
+                  onFormChange={updateVideoTranscriptForm}
+                  action={youtubeVideoAction}
+                  selectedActive={selectedActiveScreenshots}
+                  selectedTrash={selectedTrashedScreenshots}
+                  onToggleActive={toggleActiveScreenshot}
+                  onToggleTrash={toggleTrashedScreenshot}
+                  onTrashSelected={() => void trashSelectedScreenshots()}
+                  onRestoreSelected={() => void restoreSelectedScreenshots()}
+                  onClearTrash={() => void clearScreenshotsTrash()}
+                  onOpenLightbox={openLightbox}
+                  cleanCopyStatus={cleanTranscriptCopyStatus}
+                  onCopyCleanTranscript={() => void copyCleanTranscript(youtubeVideoTranscriptForm.cleanText)}
+                />
 
                 <Card>
                   <CardHeader>
@@ -1493,7 +1670,7 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
               )}
               {!markdownPath && screenshotsCount > 0 && (
                 <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
-                  Скриншотов создано: {screenshotsCount}. Markdown можно создать в деталке истории.
+                  Скриншотов создано: {screenshotsCount}. Для сохраненных YouTube-видео Markdown создается в деталке видео.
                 </p>
               )}
 
@@ -1531,51 +1708,6 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
                 </label>
               </section>
 
-            </section>
-        )}
-
-        {view === 'history' && (
-            <section className="grid gap-5">
-              {historyDetail ? (
-                <HistoryDetailView
-                  detail={historyDetail}
-                  form={historyForm}
-                  onBack={closeHistoryDetail}
-                  onSave={() => void saveHistoryDetail()}
-                  onFormat={() => void formatHistoryDetail()}
-                  onCreateMarkdown={() => void createHistoryMarkdown()}
-                  onFormChange={updateHistoryForm}
-                  saving={historySaving}
-                  action={historyAction}
-                  selectedActive={selectedActiveScreenshots}
-                  selectedTrash={selectedTrashedScreenshots}
-                  onToggleActive={toggleActiveScreenshot}
-                  onToggleTrash={toggleTrashedScreenshot}
-                  onTrashSelected={() => void trashSelectedScreenshots()}
-                  onRestoreSelected={() => void restoreSelectedScreenshots()}
-                  onClearTrash={() => void clearScreenshotsTrash()}
-                  onOpenLightbox={openLightbox}
-                  cleanCopyStatus={cleanTranscriptCopyStatus}
-                  onCopyCleanTranscript={() => void copyCleanTranscript(historyForm.cleanText)}
-                  deleting={deletingHistoryId === historyDetail.entry.id || historyAction === 'delete'}
-                  onDelete={() => void deleteHistoryEntry(historyDetail.entry)}
-                />
-              ) : (
-                <HistoryList
-                  history={history}
-                  loading={historyLoading}
-                  deletingId={deletingHistoryId}
-                  onRefresh={() => void loadHistory({ showLoading: true, showError: true })}
-                  onOpen={(id) => router.push(buildHistoryDetailPath(id))}
-                  onDelete={(entry) => void deleteHistoryEntry(entry)}
-                />
-              )}
-
-              {historyError && (
-                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-                  {historyError}
-                </p>
-              )}
             </section>
         )}
 
@@ -1700,8 +1832,8 @@ export function TranscribatorApp({ view = 'transcribe', historyEntryId, videoId 
             lightbox={lightbox}
             screenshot={lightboxScreenshot}
             totalItems={lightboxTotalItems}
-            deleting={historyAction === 'trash'}
-            restoring={historyAction === 'restore'}
+            deleting={youtubeVideoAction === 'trash'}
+            restoring={youtubeVideoAction === 'restore'}
             onClose={() => setLightbox(null)}
             onPrevious={() => navigateLightbox('previous')}
             onNext={() => navigateLightbox('next')}
@@ -1761,144 +1893,13 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HistoryList({
-  history,
-  loading,
-  deletingId,
-  onRefresh,
-  onOpen,
-  onDelete
-}: {
-  history: HistoryEntry[];
-  loading: boolean;
-  deletingId: string;
-  onRefresh: () => void;
-  onOpen: (id: string) => void;
-  onDelete: (entry: HistoryEntry) => void;
-}) {
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">История</h2>
-          <p className="mt-1 text-sm text-neutral-600">Сохраненные транскрибации и Obsidian-артефакты.</p>
-        </div>
-        <Button type="button" variant="secondary" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
-          Обновить
-        </Button>
-      </div>
-
-      {loading && history.length === 0 ? (
-        <p className="text-sm text-neutral-600">Загружаю историю...</p>
-      ) : history.length === 0 ? (
-        <p className="text-sm text-neutral-600">Завершенных транскрибаций пока нет.</p>
-      ) : (
-        <div className="grid gap-3">
-          {history.map((item) => (
-            <HistoryItem
-              item={item}
-              key={item.id}
-              deleting={deletingId === item.id}
-              onOpen={onOpen}
-              onDelete={onDelete}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function HistoryItem({
-  item,
-  deleting,
-  onOpen,
-  onDelete
-}: {
-  item: HistoryEntry;
-  deleting: boolean;
-  onOpen: (id: string) => void;
-  onDelete: (entry: HistoryEntry) => void;
-}) {
-  const title = item.title || item.source || item.sourceType || item.id;
-  const preview = item.summary || item.formattedText || item.cleanText;
-
-  return (
-    <Card
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(item.id)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onOpen(item.id);
-        }
-      }}
-      className="cursor-pointer transition hover:border-neutral-300 hover:bg-neutral-50"
-    >
-      <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <CardTitle className="break-words">{title}</CardTitle>
-          <p className="mt-1 break-words text-sm text-neutral-600">{item.source || item.sourceType}</p>
-          <p className="mt-1 text-xs text-neutral-500">{engineLabel(item.engine)} · {formatHistoryDate(item.finishedAt)}</p>
-        </div>
-        <div className="grid justify-items-start gap-1 sm:justify-items-end">
-          <Badge variant={item.status === 'done' ? 'success' : 'error'}>{item.status}</Badge>
-          <strong className="text-sm">{formatElapsed(item.elapsedSeconds)}</strong>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(item);
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-            disabled={deleting}
-          >
-            <Trash2 className="h-4 w-4" />
-            {deleting ? 'Удаляю...' : 'Удалить'}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {item.stages.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {item.stages.map((stage) => (
-              <Badge variant="secondary" key={stage.id}>
-                {STAGE_LABELS[stage.id] || stage.id}: {formatElapsed(stage.elapsedSeconds)}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        {item.error && <p className="text-sm font-medium text-red-700">{item.error}</p>}
-
-        {item.markdownPath && (
-          <div className="grid gap-1 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            <p className="break-words font-medium">Markdown: {item.markdownPath}</p>
-            <p>Скриншотов: {item.screenshotsCount}</p>
-          </div>
-        )}
-
-        {preview && (
-          <p className="text-sm text-neutral-700">{previewText(preview)}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function HistoryDetailView({
-  detail,
+function VideoTranscriptView({
+  video,
   form,
-  onBack,
   onSave,
   onFormat,
   onCreateMarkdown,
   onFormChange,
-  saving,
   action,
   selectedActive,
   selectedTrash,
@@ -1909,19 +1910,15 @@ function HistoryDetailView({
   onClearTrash,
   onOpenLightbox,
   cleanCopyStatus,
-  onCopyCleanTranscript,
-  deleting,
-  onDelete
+  onCopyCleanTranscript
 }: {
-  detail: HistoryDetailResponse;
-  form: HistoryEditForm;
-  onBack: () => void;
+  video: YouTubeVideo;
+  form: VideoTranscriptForm;
   onSave: () => void;
   onFormat: () => void;
   onCreateMarkdown: () => void;
-  onFormChange: <K extends keyof HistoryEditForm>(key: K, value: HistoryEditForm[K]) => void;
-  saving: boolean;
-  action: HistoryAction;
+  onFormChange: <K extends keyof VideoTranscriptForm>(key: K, value: VideoTranscriptForm[K]) => void;
+  action: VideoAction;
   selectedActive: string[];
   selectedTrash: string[];
   onToggleActive: (fileName: string, checked: boolean) => void;
@@ -1929,31 +1926,25 @@ function HistoryDetailView({
   onTrashSelected: () => void;
   onRestoreSelected: () => void;
   onClearTrash: () => void;
-  onOpenLightbox: (scope: ScreenshotScope, screenshot: HistoryScreenshot) => void;
+  onOpenLightbox: (scope: ScreenshotScope, screenshot: VideoScreenshot) => void;
   cleanCopyStatus: CopyStatus;
   onCopyCleanTranscript: () => void;
-  deleting: boolean;
-  onDelete: () => void;
 }) {
-  const entry = detail.entry;
   const systemFields: Array<[string, string | number | undefined]> = [
-    ['id', entry.id],
-    ['status', entry.status],
-    ['startedAt', formatHistoryDate(entry.startedAt)],
-    ['finishedAt', formatHistoryDate(entry.finishedAt)],
-    ['elapsedSeconds', `${entry.elapsedSeconds} сек`],
-    ['outputPath', entry.outputPath],
-    ['markdownPath', entry.markdownPath],
-    ['obsidianFolderPath', entry.obsidianFolderPath]
+    ['status', formatYouTubeVideoStatus(video.status)],
+    ['transcriptionJobId', video.transcriptionJobId],
+    ['transcriptionEngine', video.transcriptionEngine || 'Default engine'],
+    ['startedAt', video.transcriptionStartedAt ? formatDateTime(video.transcriptionStartedAt) : ''],
+    ['finishedAt', video.transcriptionFinishedAt ? formatDateTime(video.transcriptionFinishedAt) : ''],
+    ['markdownPath', video.markdownPath],
+    ['screenshots', video.screenshots.length],
+    ['trash', video.trashedScreenshots.length]
   ];
 
   return (
     <section className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button type="button" variant="secondary" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
-          Назад
-        </Button>
+        <h3 className="text-xl font-semibold">Транскрипция</h3>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={onFormat} disabled={action === 'format'}>
             <Sparkles className={cn('h-4 w-4', action === 'format' && 'animate-pulse')} />
@@ -1963,13 +1954,9 @@ function HistoryDetailView({
             <FileText className="h-4 w-4" />
             {action === 'markdown' ? 'Создаю...' : 'Создать Markdown'}
           </Button>
-          <Button type="button" variant="destructive" onClick={onDelete} disabled={deleting}>
-            <Trash2 className="h-4 w-4" />
-            {deleting ? 'Удаляю...' : 'Удалить'}
-          </Button>
-          <Button type="button" onClick={onSave} disabled={saving}>
+          <Button type="button" onClick={onSave} disabled={action === 'save'}>
             <Save className="h-4 w-4" />
-            {saving ? 'Сохраняю...' : 'Сохранить правки'}
+            {action === 'save' ? 'Сохраняю...' : 'Сохранить правки'}
           </Button>
         </div>
       </div>
@@ -1977,10 +1964,12 @@ function HistoryDetailView({
       <Card>
         <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <CardTitle className="break-words">{form.title || form.source || entry.id}</CardTitle>
-            <p className="mt-1 break-words text-sm text-neutral-600">{form.source || 'Источник не указан'}</p>
+            <CardTitle className="break-words">{video.title || video.url}</CardTitle>
+            <p className="mt-1 break-words text-sm text-neutral-600">{video.url}</p>
           </div>
-          <Badge variant={entry.status === 'done' ? 'success' : 'error'}>{entry.status}</Badge>
+          <Badge variant={video.status === 'done' ? 'success' : video.status === 'error' ? 'error' : 'secondary'}>
+            {formatYouTubeVideoStatus(video.status)}
+          </Badge>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           {systemFields.map(([label, value]) => (
@@ -1994,20 +1983,6 @@ function HistoryDetailView({
           <CardTitle>Содержимое</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="grid gap-2 text-sm font-medium">
-              Title
-              <Input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} />
-            </label>
-            <label className="grid gap-2 text-sm font-medium">
-              Source
-              <Input value={form.source} onChange={(event) => onFormChange('source', event.target.value)} />
-            </label>
-          </div>
-          <label className="grid gap-2 text-sm font-medium">
-            Engine
-            <Input value={form.engine} onChange={(event) => onFormChange('engine', event.target.value)} />
-          </label>
           <label className="grid gap-2 text-sm font-medium">
             Summary
             <Textarea className="min-h-36" value={form.summary} onChange={(event) => onFormChange('summary', event.target.value)} />
@@ -2048,7 +2023,7 @@ function HistoryDetailView({
           <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>Галерея</CardTitle>
-              <p className="mt-1 text-sm text-neutral-600">Активные скриншоты попадают в `transcript.md`.</p>
+              <p className="mt-1 text-sm text-neutral-600">Активные скриншоты попадают в transcript.md.</p>
             </div>
             <Button type="button" variant="secondary" onClick={onTrashSelected} disabled={selectedActive.length === 0 || action === 'trash'}>
               <Trash2 className="h-4 w-4" />
@@ -2057,7 +2032,7 @@ function HistoryDetailView({
           </CardHeader>
           <CardContent>
             <ScreenshotGrid
-              screenshots={detail.screenshots}
+              screenshots={video.screenshots}
               scope="active"
               selected={selectedActive}
               emptyText="Активных скриншотов нет."
@@ -2087,7 +2062,7 @@ function HistoryDetailView({
                 type="button"
                 variant="secondary"
                 onClick={onClearTrash}
-                disabled={detail.trashedScreenshots.length === 0 || action === 'clear'}
+                disabled={video.trashedScreenshots.length === 0 || action === 'clear'}
               >
                 <Trash2 className="h-4 w-4" />
                 {action === 'clear' ? 'Удаляю...' : 'Очистить'}
@@ -2096,7 +2071,7 @@ function HistoryDetailView({
           </CardHeader>
           <CardContent>
             <ScreenshotGrid
-              screenshots={detail.trashedScreenshots}
+              screenshots={video.trashedScreenshots}
               scope="trash"
               selected={selectedTrash}
               emptyText="Корзина пуста."
@@ -2118,12 +2093,12 @@ function ScreenshotGrid({
   onToggle,
   onOpen
 }: {
-  screenshots: HistoryScreenshot[];
+  screenshots: VideoScreenshot[];
   scope: ScreenshotScope;
   selected: string[];
   emptyText: string;
   onToggle: (fileName: string, checked: boolean) => void;
-  onOpen: (scope: ScreenshotScope, screenshot: HistoryScreenshot) => void;
+  onOpen: (scope: ScreenshotScope, screenshot: VideoScreenshot) => void;
 }) {
   if (screenshots.length === 0) {
     return <p className="text-sm text-neutral-600">{emptyText}</p>;
@@ -2187,7 +2162,7 @@ function ScreenshotLightbox({
   onUndo
 }: {
   lightbox: LightboxState;
-  screenshot: HistoryScreenshot;
+  screenshot: VideoScreenshot;
   totalItems: number;
   deleting: boolean;
   restoring: boolean;
@@ -2271,12 +2246,12 @@ function ReadonlyField({ label, value }: { label: string; value: string | number
   );
 }
 
-function screenshotsForScope(detail: HistoryDetailResponse, scope: ScreenshotScope): HistoryScreenshot[] {
-  return scope === 'active' ? detail.screenshots : detail.trashedScreenshots;
+function screenshotsForScope(video: YouTubeVideo, scope: ScreenshotScope): VideoScreenshot[] {
+  return scope === 'active' ? video.screenshots : video.trashedScreenshots;
 }
 
-function getLightboxScreenshot(detail: HistoryDetailResponse, lightbox: LightboxState): HistoryScreenshot | null {
-  return screenshotsForScope(detail, lightbox.scope)[lightbox.index] || null;
+function getLightboxScreenshot(video: YouTubeVideo, lightbox: LightboxState): VideoScreenshot | null {
+  return screenshotsForScope(video, lightbox.scope)[lightbox.index] || null;
 }
 
 function createStages(stageTemplate: Array<{ id: string; label: string }>): StageState[] {
@@ -2291,15 +2266,12 @@ function createStages(stageTemplate: Array<{ id: string; label: string }>): Stag
   }));
 }
 
-function createHistoryEditForm(entry?: HistoryEntry): HistoryEditForm {
+function createVideoTranscriptForm(video?: YouTubeVideo): VideoTranscriptForm {
   return {
-    title: entry?.title || '',
-    source: entry?.source || '',
-    engine: entry?.engine || '',
-    summary: entry?.summary || '',
-    formattedText: entry?.formattedText || '',
-    cleanText: entry?.cleanText || '',
-    rawText: entry?.rawText || ''
+    summary: video?.summary || '',
+    formattedText: video?.formattedText || '',
+    cleanText: video?.cleanText || '',
+    rawText: video?.rawText || ''
   };
 }
 
@@ -2358,7 +2330,7 @@ function isNavigationItemActive(itemId: AppView, view: AppView) {
   return itemId === view || (itemId === 'videos' && view === 'videoDetail');
 }
 
-function formatHistoryDate(value: number) {
+function formatDateTime(value: number) {
   if (!Number.isFinite(value) || value <= 0) return 'Нет данных';
   return new Date(value).toLocaleString('ru-RU');
 }
@@ -2396,6 +2368,13 @@ function formatYouTubeVideoStatus(status: YouTubeVideo['status']) {
     done: 'Готово',
     error: 'Ошибка'
   }[status];
+}
+
+function formatTranscriptAvailability(video: YouTubeVideo) {
+  if (video.status === 'processing') return 'Транскрибация выполняется';
+  if (video.status === 'error') return 'Транскрибация завершилась ошибкой';
+  if (video.cleanText || video.rawText || video.formattedText) return 'Транскрипт есть';
+  return 'Транскрипта пока нет';
 }
 
 function previewText(value: string, maxLength = 220) {

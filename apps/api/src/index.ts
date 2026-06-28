@@ -6,24 +6,25 @@ import path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
 import {
   fileTranscriptionRequestSchema,
-  historyScreenshotScopeSchema,
-  historyScreenshotsRequestSchema,
   screenshotFileNameSchema,
-  updateHistoryEntryRequestSchema,
+  updateYouTubeVideoTranscriptRequestSchema,
   urlTranscriptionRequestSchema,
   videoCompressionRequestSchema,
   videoDownloadRequestSchema,
   videoFormatsRequestSchema,
+  videoScreenshotScopeSchema,
+  videoScreenshotsRequestSchema,
   youtubeVideoCheckRequestSchema,
-  youtubeVideoCreateRequestSchema
+  youtubeVideoCreateRequestSchema,
+  youtubeVideoTranscriptionRequestSchema
 } from '@transcribator/shared';
 import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
-import { createJob, getJob, listHistory } from './jobs.js';
-import { historyDetailsService } from './historyDetails.js';
-import { defaultTranscriptionStore, migrateHistoryJsonToSqlite } from './transcriptionStore.js';
+import { createJob, getJob } from './jobs.js';
 import { compressVideo, ensureCompressedDir } from './videoCompression.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
 import { defaultVideoLibraryStore } from './videoLibrary.js';
+import { videoArtifactsService } from './videoArtifacts.js';
+import { videoTranscriptionService } from './videoTranscription.js';
 import { createHttpError, isHttpError } from './errors.js';
 import { formatBytes, getMaxUploadSizeBytes } from './uploadLimit.js';
 import type { JobMetadata } from './types.js';
@@ -38,7 +39,6 @@ const maxUploadSizeBytes = getMaxUploadSizeBytes();
 await ensureRuntimeDirs();
 await ensureDownloadDir();
 await ensureCompressedDir();
-await migrateHistoryJsonToSqlite({ store: defaultTranscriptionStore });
 await mkdir(uploadDir, { recursive: true });
 
 const upload = multer({
@@ -95,95 +95,6 @@ app.post('/transcribe/file', upload.single('file'), async (req: Request, res: Re
   }
 });
 
-app.get('/transcribe/history', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    res.json({ history: await listHistory() });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get('/transcribe/history/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    res.json(await historyDetailsService.get(req.params.id));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.patch('/transcribe/history/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    const body = updateHistoryEntryRequestSchema.parse(req.body || {});
-    res.json(await historyDetailsService.update(req.params.id, body));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.delete('/transcribe/history/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    res.json(await historyDetailsService.deleteEntry(req.params.id));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/transcribe/history/:id/format', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    res.json(await historyDetailsService.formatWithAi(req.params.id));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/transcribe/history/:id/markdown', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    res.json(await historyDetailsService.createMarkdown(req.params.id));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/transcribe/history/:id/screenshots/trash', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    const body = historyScreenshotsRequestSchema.parse(req.body || {});
-    res.json(await historyDetailsService.trashScreenshots(req.params.id, body));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/transcribe/history/:id/screenshots/restore', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    const body = historyScreenshotsRequestSchema.parse(req.body || {});
-    res.json(await historyDetailsService.restoreScreenshots(req.params.id, body));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.delete('/transcribe/history/:id/screenshots/trash', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-  try {
-    res.json(await historyDetailsService.clearScreenshotsTrash(req.params.id));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get(
-  '/transcribe/history/:id/screenshots/:scope/:fileName',
-  async (req: Request<{ id: string; scope: string; fileName: string }>, res: Response, next: NextFunction) => {
-    try {
-      const scope = historyScreenshotScopeSchema.parse(req.params.scope);
-      const fileName = screenshotFileNameSchema.parse(req.params.fileName);
-      res.type('image/jpeg');
-      res.sendFile(await historyDetailsService.getScreenshotPath(req.params.id, scope, fileName));
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
 app.post('/videos/formats', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = videoFormatsRequestSchema.parse(req.body || {});
@@ -235,6 +146,80 @@ app.post('/videos/library/:id/metadata', async (req: Request, res: Response, nex
   }
 });
 
+app.post('/videos/library/:id/transcribe', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const body = youtubeVideoTranscriptionRequestSchema.parse(req.body || {});
+    res.status(202).json(await videoTranscriptionService.start(req.params.id, body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch('/videos/library/:id/transcript', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const body = updateYouTubeVideoTranscriptRequestSchema.parse(req.body || {});
+    res.json(await videoArtifactsService.updateTranscript(req.params.id, body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/library/:id/format', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await videoArtifactsService.formatWithAi(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/library/:id/markdown', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await videoArtifactsService.createMarkdown(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/library/:id/screenshots/trash', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const body = videoScreenshotsRequestSchema.parse(req.body || {});
+    res.json(await videoArtifactsService.trashScreenshots(req.params.id, body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/videos/library/:id/screenshots/restore', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const body = videoScreenshotsRequestSchema.parse(req.body || {});
+    res.json(await videoArtifactsService.restoreScreenshots(req.params.id, body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/videos/library/:id/screenshots/trash', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await videoArtifactsService.clearScreenshotsTrash(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get(
+  '/videos/library/:id/screenshots/:scope/:fileName',
+  async (req: Request<{ id: string; scope: string; fileName: string }>, res: Response, next: NextFunction) => {
+    try {
+      const scope = videoScreenshotScopeSchema.parse(req.params.scope);
+      const fileName = screenshotFileNameSchema.parse(req.params.fileName);
+      res.type('image/jpeg');
+      res.sendFile(await videoArtifactsService.getScreenshotPath(req.params.id, scope, fileName));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 app.post('/videos/library', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = youtubeVideoCreateRequestSchema.parse(req.body || {});
@@ -259,8 +244,7 @@ app.post('/videos/compress', upload.single('file'), async (req: Request, res: Re
         sourceType: 'video-compression',
         ...(uploadedFile.originalname ? { source: uploadedFile.originalname } : {}),
         preset: body.preset
-      },
-      { persistHistory: false }
+      }
     );
     res.status(202).json({ jobId: job.id });
   } catch (error) {

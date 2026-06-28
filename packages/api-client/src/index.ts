@@ -2,40 +2,40 @@ import type { ZodType } from 'zod';
 import {
   apiErrorSchema,
   healthResponseSchema,
-  historyDeleteResponseSchema,
-  historyDetailResponseSchema,
-  historyResponseSchema,
-  historyScreenshotsOperationResponseSchema,
-  historyScreenshotsRequestSchema,
   jobIdResponseSchema,
-  updateHistoryEntryRequestSchema,
+  updateYouTubeVideoTranscriptRequestSchema,
   youtubeVideoAddResponseSchema,
   youtubeVideoCheckResponseSchema,
   youtubeVideoCreateRequestSchema,
   youtubeVideoDetailResponseSchema,
   youtubeVideoListResponseSchema,
+  youtubeVideoScreenshotsOperationResponseSchema,
+  youtubeVideoTranscriptResponseSchema,
+  youtubeVideoTranscriptionRequestSchema,
+  youtubeVideoTranscriptionStartResponseSchema,
   videoCompressionPresetSchema,
   videoDownloadResponseSchema,
   videoFormatsResponseSchema,
+  videoScreenshotsRequestSchema,
   type ApiError,
   type HealthResponse,
-  type HistoryDeleteResponse,
-  type HistoryDetailResponse,
-  type HistoryResponse,
-  type HistoryScreenshotScope,
-  type HistoryScreenshotsOperationResponse,
   type JobIdResponse,
   type TranscriptionArtifactOptions,
   type TranscriptionEngine,
-  type UpdateHistoryEntryRequest,
+  type UpdateYouTubeVideoTranscriptRequest,
   type VideoCompressionPreset,
   type VideoDownloadResponse,
   type VideoFormatsResponse,
+  type VideoScreenshotScope,
   type YouTubeVideoAddResponse,
   type YouTubeVideoCheckResponse,
   type YouTubeVideoCreateRequest,
   type YouTubeVideoDetailResponse,
-  type YouTubeVideoListResponse
+  type YouTubeVideoListResponse,
+  type YouTubeVideoScreenshotsOperationResponse,
+  type YouTubeVideoTranscriptResponse,
+  type YouTubeVideoTranscriptionRequest,
+  type YouTubeVideoTranscriptionStartResponse
 } from '@transcribator/shared';
 
 export type FetchLike = typeof fetch;
@@ -98,96 +98,6 @@ export function createApiClient(options: ApiClientOptions = {}) {
         jobIdResponseSchema
       );
     },
-
-    getHistory: () =>
-      requestJson<HistoryResponse>(fetcher, baseUrl, '/transcribe/history', {}, historyResponseSchema),
-
-    getHistoryEntry: (id: string) =>
-      requestJson<HistoryDetailResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}`,
-        {},
-        historyDetailResponseSchema
-      ),
-
-    updateHistoryEntry: (id: string, patch: UpdateHistoryEntryRequest) =>
-      requestJson<HistoryDetailResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateHistoryEntryRequestSchema.parse(patch))
-        },
-        historyDetailResponseSchema
-      ),
-
-    deleteHistoryEntry: (id: string) =>
-      requestJson<HistoryDeleteResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}`,
-        { method: 'DELETE' },
-        historyDeleteResponseSchema
-      ),
-
-    formatHistoryEntry: (id: string) =>
-      requestJson<HistoryDetailResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}/format`,
-        { method: 'POST' },
-        historyDetailResponseSchema
-      ),
-
-    createHistoryMarkdown: (id: string) =>
-      requestJson<HistoryDetailResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}/markdown`,
-        { method: 'POST' },
-        historyDetailResponseSchema
-      ),
-
-    trashHistoryScreenshots: (id: string, fileNames: string[]) =>
-      requestJson<HistoryScreenshotsOperationResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}/screenshots/trash`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(historyScreenshotsRequestSchema.parse({ fileNames }))
-        },
-        historyScreenshotsOperationResponseSchema
-      ),
-
-    restoreHistoryScreenshots: (id: string, fileNames: string[]) =>
-      requestJson<HistoryScreenshotsOperationResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}/screenshots/restore`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(historyScreenshotsRequestSchema.parse({ fileNames }))
-        },
-        historyScreenshotsOperationResponseSchema
-      ),
-
-    clearHistoryScreenshotsTrash: (id: string) =>
-      requestJson<HistoryScreenshotsOperationResponse>(
-        fetcher,
-        baseUrl,
-        `/transcribe/history/${encodeURIComponent(id)}/screenshots/trash`,
-        { method: 'DELETE' },
-        historyScreenshotsOperationResponseSchema
-      ),
-
-    historyScreenshotUrl: (id: string, scope: HistoryScreenshotScope, fileName: string) =>
-      `${baseUrl}/transcribe/history/${encodeURIComponent(id)}/screenshots/${scope}/${encodeURIComponent(fileName)}`,
 
     getVideoFormats: (url: string) =>
       requestJson<VideoFormatsResponse>(
@@ -263,6 +173,88 @@ export function createApiClient(options: ApiClientOptions = {}) {
         { method: 'POST' },
         youtubeVideoDetailResponseSchema
       ),
+
+    transcribeYouTubeVideo: (id: string, input: Partial<YouTubeVideoTranscriptionRequest> = {}) =>
+      requestJson<YouTubeVideoTranscriptionStartResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/transcribe`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(youtubeVideoTranscriptionRequestSchema.parse(input))
+        },
+        youtubeVideoTranscriptionStartResponseSchema
+      ),
+
+    updateYouTubeVideoTranscript: (id: string, patch: UpdateYouTubeVideoTranscriptRequest) =>
+      requestJson<YouTubeVideoTranscriptResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/transcript`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateYouTubeVideoTranscriptRequestSchema.parse(patch))
+        },
+        youtubeVideoTranscriptResponseSchema
+      ),
+
+    formatYouTubeVideoTranscript: (id: string) =>
+      requestJson<YouTubeVideoTranscriptResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/format`,
+        { method: 'POST' },
+        youtubeVideoTranscriptResponseSchema
+      ),
+
+    createYouTubeVideoMarkdown: (id: string) =>
+      requestJson<YouTubeVideoTranscriptResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/markdown`,
+        { method: 'POST' },
+        youtubeVideoTranscriptResponseSchema
+      ),
+
+    trashYouTubeVideoScreenshots: (id: string, fileNames: string[]) =>
+      requestJson<YouTubeVideoScreenshotsOperationResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/screenshots/trash`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(videoScreenshotsRequestSchema.parse({ fileNames }))
+        },
+        youtubeVideoScreenshotsOperationResponseSchema
+      ),
+
+    restoreYouTubeVideoScreenshots: (id: string, fileNames: string[]) =>
+      requestJson<YouTubeVideoScreenshotsOperationResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/screenshots/restore`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(videoScreenshotsRequestSchema.parse({ fileNames }))
+        },
+        youtubeVideoScreenshotsOperationResponseSchema
+      ),
+
+    clearYouTubeVideoScreenshotsTrash: (id: string) =>
+      requestJson<YouTubeVideoScreenshotsOperationResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/screenshots/trash`,
+        { method: 'DELETE' },
+        youtubeVideoScreenshotsOperationResponseSchema
+      ),
+
+    youTubeVideoScreenshotUrl: (id: string, scope: VideoScreenshotScope, fileName: string) =>
+      `${baseUrl}/videos/library/${encodeURIComponent(id)}/screenshots/${scope}/${encodeURIComponent(fileName)}`,
 
     compressVideo: (file: File, preset: VideoCompressionPreset = 'balanced') => {
       const body = new FormData();

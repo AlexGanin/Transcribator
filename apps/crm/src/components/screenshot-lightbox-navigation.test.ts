@@ -6,9 +6,9 @@ import {
   getRestoredLightboxIndex,
   isLightboxDeleteKey,
   isLightboxUndoKey
-} from './history-lightbox-navigation.js';
+} from './screenshot-lightbox-navigation.js';
 
-describe('history lightbox navigation', () => {
+describe('screenshot lightbox navigation', () => {
   it('wraps left and right keyboard navigation across available screenshots', () => {
     assert.equal(getAdjacentLightboxIndex(0, 3, 'previous'), 2);
     assert.equal(getAdjacentLightboxIndex(2, 3, 'next'), 0);

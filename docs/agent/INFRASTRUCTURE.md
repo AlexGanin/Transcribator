@@ -115,22 +115,22 @@ pipx install mlx-whisper
 
 ## Runtime storage
 
-`runtime/` — общий локальный каталог для файлов, которые появляются во время работы API. Это не исходники проекта, а рабочие данные: SQLite-индекс транскрибаций, загруженные медиа, временные файлы конвертации, screenshots, Markdown-артефакты, скачанные видео и legacy Obsidian-заметки. Каталог нужен, чтобы runtime-артефакты не смешивались с кодом, пакетами и документацией.
+`runtime/` — общий локальный каталог для файлов, которые появляются во время работы API. Это не исходники проекта, а рабочие данные: SQLite-индекс YouTube-видео с транскриптами, загруженные медиа, временные файлы конвертации, screenshots, Markdown-артефакты, скачанные видео и legacy Obsidian-заметки. Каталог нужен, чтобы runtime-артефакты не смешивались с кодом, пакетами и документацией.
 
 | Путь | Кто использует | Что появляется внутри |
 | --- | --- | --- |
-| `runtime/transcribator.sqlite` | `apps/api/src/transcriptionStore.ts`, `apps/api/src/jobs.ts`, `apps/api/src/historyDetails.ts`, `apps/api/src/videoLibrary.ts` | Единый источник правды для истории транскрибаций, состояния скриншотов и YouTube video backlog. Таблица `transcriptions` хранит `rawText`, `cleanText`, будущие `formattedText`/`summary`, статусы, source/engine и `markdownPath`. Таблица `screenshots` хранит имя файла, timestamp, статус `active`/`trash` и текущий путь. Таблица `youtube_videos` хранит добавленные из расширения ролики, дедуплицирует их по `youtube_video_id` и кэширует детальные `yt-dlp` metadata для CRM `/videos/[id]`. |
+| `runtime/transcribator.sqlite` | `apps/api/src/videoLibrary.ts`, `apps/api/src/videoTranscription.ts`, `apps/api/src/videoArtifacts.ts` | Единый источник правды для YouTube video backlog и результатов транскрибации. Таблица `youtube_videos` хранит добавленные из расширения ролики, дедуплицирует их по `youtube_video_id`, кэширует детальные `yt-dlp` metadata для CRM `/videos/[id]`, а также хранит status, job id, engine, raw/clean/formatted text, summary, markdown path, timestamps, error и JSON-списки active/trash screenshots. Legacy-таблицы `transcriptions` и `screenshots` удаляются при старте API без миграции. |
 | `runtime/source/` | `apps/api/src/pipeline.ts` | Копии файлов, которые пользователь отправил на транскрибацию через upload. API сохраняет их под безопасным именем файла, чтобы исходник можно было повторно обработать или сверить с результатом. |
 | `runtime/tmp/` | `multer`, `apps/api/src/index.ts`, `apps/api/src/pipeline.ts` | Временные upload-файлы, WAV-файлы после конвертации через `ffmpeg`, а также рабочие папки CLI-движков Whisper. Эти данные нужны только во время обработки и могут очищаться после завершения задач. |
-| `runtime/output/` | `apps/api/src/transcriptionStore.ts` migration | Legacy-каталог. Новые итоговые `.txt`-транскрипты больше не создаются. Старый `history.json` может быть прочитан при старте API и импортирован в SQLite, после чего SQLite становится источником истории. |
-| `runtime/artifacts/` | `apps/api/src/obsidianNotes.ts`, `apps/api/src/markdownArtifacts.ts`, `apps/api/src/historyDetails.ts` | Файловые артефакты записей истории. Для транскрибации со скриншотами создается `runtime/artifacts/<transcription-id>/screenshots/*.jpg`; удаление переносит файлы в `runtime/artifacts/<transcription-id>/trash/screenshots/*.jpg`. Кнопка «Создать Markdown» пишет `runtime/artifacts/<transcription-id>/transcript.md` из данных SQLite. |
+| `runtime/output/` | legacy | Legacy-каталог. Новые итоговые `.txt`-транскрипты и `history.json` больше не создаются и не мигрируются. |
+| `runtime/artifacts/` | `apps/api/src/obsidianNotes.ts`, `apps/api/src/videoArtifacts.ts`, `apps/api/src/pipeline.ts` | Файловые артефакты видео и transient jobs. Для транскрибации сохраненного YouTube-видео со скриншотами создается `runtime/artifacts/<video-id>/screenshots/*.jpg`; удаление переносит файлы в `runtime/artifacts/<video-id>/trash/screenshots/*.jpg`. Кнопка «Создать Markdown» пишет `runtime/artifacts/<video-id>/transcript.md` из данных SQLite. |
 | `runtime/downloads/` | `apps/api/src/videoDownload.ts` | Видео, скачанные через вкладку скачивания YouTube. Имя файла формируется из названия ролика и выбранного format id. |
 | `runtime/compressed/` | `apps/api/src/videoCompression.ts` | Сжатые локальные видео из вкладки CRM «Сжать видео». API пишет сюда MP4-файлы Apple VideoToolbox HEVC/H.265 + AAC с безопасным именем, выбранным пресетом и timestamp. |
 | `runtime/obsidian/` | legacy helpers/tests | Legacy Obsidian-ready vault folders старых записей. Новые транскрибации больше не создают здесь `transcript.md`/`metadata.json`; Markdown создается отдельно в `runtime/artifacts/<transcription-id>/`. |
 
 Правило для git: из `runtime/source/`, `runtime/tmp/`, `runtime/output/`, `runtime/artifacts/`, `runtime/downloads/`, `runtime/compressed/` и `runtime/obsidian/` коммитятся только `.gitkeep` файлы. `runtime/transcribator.sqlite`, реальные медиа, временные файлы, `history.json`, Markdown, `.jpg`, скачанные и сжатые видео, legacy Obsidian `.md`/`metadata.json`, а также системные файлы вроде `.DS_Store` должны оставаться локальными.
 
-Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/`, старых файлов в `runtime/downloads/`, старых сжатых роликов в `runtime/compressed/` и ненужных файлов в `runtime/artifacts/<id>/trash/`. `runtime/transcribator.sqlite` лучше не удалять без осознанного решения, потому что он используется экраном истории в CRM. `runtime/output/history.json` после миграции нужен только как legacy backup.
+Если нужно почистить место на диске, безопаснее всего начинать с `runtime/tmp/`, старых файлов в `runtime/downloads/`, старых сжатых роликов в `runtime/compressed/` и ненужных файлов в `runtime/artifacts/<id>/trash/`. `runtime/transcribator.sqlite` лучше не удалять без осознанного решения, потому что он используется экраном видео в CRM.
 
 ## API surface
 
@@ -139,15 +139,6 @@ pipx install mlx-whisper
 | `GET` | `/health` | Базовый health response API |
 | `POST` | `/transcribe/url` | Запустить URL transcription job |
 | `POST` | `/transcribe/file` | Запустить uploaded file transcription job |
-| `GET` | `/transcribe/history` | Вернуть сохраненные history entries |
-| `GET` | `/transcribe/history/:id` | Вернуть SQLite detail записи, активные screenshots и корзину |
-| `PATCH` | `/transcribe/history/:id` | Обновить `source`, `engine`, `summary`, `formattedText`, `cleanText`, `rawText` |
-| `DELETE` | `/transcribe/history/:id` | Удалить запись истории из SQLite вместе со screenshot-строками и папкой `runtime/artifacts/<id>/`; `runtime/source/` не удаляется |
-| `POST` | `/transcribe/history/:id/format` | Placeholder AI step: fake delay и заполнение `formattedText` текущим лучшим текстом, чтобы позже заменить реальной нейросетью |
-| `POST` | `/transcribe/history/:id/markdown` | Сгенерировать `runtime/artifacts/<id>/transcript.md` из SQLite; выбирает `formattedText`, затем `cleanText`, затем `rawText`, и включает summary только если он уже есть |
-| `POST` | `/transcribe/history/:id/screenshots/trash` | Перенести выбранные active screenshots в `trash/screenshots` и обновить SQLite статус |
-| `POST` | `/transcribe/history/:id/screenshots/restore` | Вернуть выбранные screenshots из корзины обратно в active |
-| `DELETE` | `/transcribe/history/:id/screenshots/trash` | Физически удалить файлы из корзины и убрать trash-строки SQLite |
 | `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream для job progress |
 | `GET` | `/jobs/:id/events` | Нейтральный Server-Sent Events stream для job progress |
 | `POST` | `/videos/formats` | Вернуть доступные video download formats |
@@ -156,6 +147,14 @@ pipx install mlx-whisper
 | `GET` | `/videos/library/check` | Проверить по URL, добавлено ли YouTube-видео |
 | `GET` | `/videos/library/:id` | Вернуть детальную карточку добавленного YouTube-видео; если metadata еще нет, попробовать загрузить ее через `yt-dlp --dump-json` и закэшировать |
 | `POST` | `/videos/library/:id/metadata` | Принудительно обновить кэш metadata добавленного YouTube-видео |
+| `POST` | `/videos/library/:id/transcribe` | Запустить transcription job для добавленного YouTube-видео и сохранить результат в `youtube_videos` |
+| `PATCH` | `/videos/library/:id/transcript` | Обновить `summary`, `formattedText`, `cleanText`, `rawText` у видео |
+| `POST` | `/videos/library/:id/format` | Placeholder AI step: fake delay и заполнение `formattedText` текущим лучшим текстом |
+| `POST` | `/videos/library/:id/markdown` | Сгенерировать `runtime/artifacts/<video-id>/transcript.md` из SQLite |
+| `POST` | `/videos/library/:id/screenshots/trash` | Перенести выбранные active screenshots видео в `trash/screenshots` и обновить JSON в SQLite |
+| `POST` | `/videos/library/:id/screenshots/restore` | Вернуть выбранные screenshots видео из корзины обратно в active |
+| `DELETE` | `/videos/library/:id/screenshots/trash` | Физически удалить файлы из корзины и очистить trash JSON |
+| `GET` | `/videos/library/:id/screenshots/:scope/:fileName` | Отдать JPEG-файл скриншота видео |
 | `POST` | `/videos/library` | Добавить YouTube-видео из Chrome extension в backlog |
 | `POST` | `/videos/compress` | Загрузить локальный video file и запустить compression job в `runtime/compressed/` |
 
@@ -180,7 +179,7 @@ File jobs используют:
 
 - `screenshots`
 
-Markdown больше не является частью progress pipeline: CRM создает его отдельной кнопкой в деталке истории. CRM отображает stage progress из SSE events и локально считает elapsed time.
+Markdown больше не является частью progress pipeline: CRM создает его отдельной кнопкой в деталке видео. CRM отображает stage progress из SSE events и локально считает elapsed time.
 
 ## Операционные заметки
 

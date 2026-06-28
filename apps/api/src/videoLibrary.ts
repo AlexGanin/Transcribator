@@ -4,10 +4,18 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHttpError } from './errors.js';
-import { DEFAULT_DB_PATH } from './transcriptionStore.js';
+import { DEFAULT_DB_PATH } from './runtimePaths.js';
 import { normalizeFormats } from './videoDownload.js';
 import type { CommandResult, YtDlpVideoFormatObject } from './types.js';
-import type { VideoFormat, YouTubeVideo, YouTubeVideoCreateRequest, YouTubeVideoDetailResponse } from '@transcribator/shared';
+import type {
+  TranscriptionResult,
+  UpdateYouTubeVideoTranscriptRequest,
+  VideoFormat,
+  VideoScreenshot,
+  YouTubeVideo,
+  YouTubeVideoCreateRequest,
+  YouTubeVideoDetailResponse
+} from '@transcribator/shared';
 
 export interface VideoLibraryStoreOptions {
   dbPath?: string | undefined;
@@ -26,6 +34,11 @@ export interface CheckYouTubeVideoResult {
 }
 
 export type YouTubeVideoMetadataFetcher = (url: string) => Promise<YouTubeVideoMetadata>;
+export type VideoTranscriptPatch = UpdateYouTubeVideoTranscriptRequest & {
+  markdownPath?: string | undefined;
+  transcriptionEngine?: string | undefined;
+  transcriptionFinishedAt?: number | null | undefined;
+};
 
 const DEFAULT_LIST_METADATA_ENRICHMENT_LIMIT = 20;
 
@@ -133,6 +146,18 @@ export class VideoLibraryStore {
       formats: [],
       metadataFetchedAt: null,
       status: 'added',
+      transcriptionJobId: '',
+      transcriptionEngine: '',
+      rawText: '',
+      cleanText: '',
+      formattedText: '',
+      summary: '',
+      markdownPath: '',
+      transcriptionError: '',
+      transcriptionStartedAt: null,
+      transcriptionFinishedAt: null,
+      screenshots: [],
+      trashedScreenshots: [],
       createdAt: now,
       updatedAt: now
     };
@@ -234,6 +259,155 @@ export class VideoLibraryStore {
     return missingMetadataVideos.length > 0 ? this.listVideos(limit) : videos;
   }
 
+  markTranscriptionProcessing(id: string, input: {
+    jobId: string;
+    engine?: string | undefined;
+    startedAt?: number | undefined;
+  }): YouTubeVideo {
+    const video = this.requireVideo(id);
+    const now = this.now();
+    const startedAt = input.startedAt || now;
+
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET
+        status = 'processing',
+        transcription_job_id = ?,
+        transcription_engine = ?,
+        transcription_error = '',
+        transcription_started_at = ?,
+        transcription_finished_at = NULL,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      input.jobId,
+      input.engine || video.transcriptionEngine || '',
+      startedAt,
+      now,
+      id
+    );
+
+    return this.requireVideo(id);
+  }
+
+  saveTranscriptionResult(id: string, input: {
+    jobId: string;
+    result: TranscriptionResult;
+    finishedAt?: number | undefined;
+  }): YouTubeVideo {
+    const current = this.requireVideo(id);
+    const finishedAt = input.finishedAt || this.now();
+    const screenshots = Array.isArray(input.result.screenshots) ? input.result.screenshots : current.screenshots;
+
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET
+        status = 'done',
+        transcription_job_id = ?,
+        transcription_engine = ?,
+        raw_text = ?,
+        clean_text = ?,
+        formatted_text = ?,
+        summary = ?,
+        markdown_path = ?,
+        transcription_error = '',
+        transcription_finished_at = ?,
+        screenshots_json = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      input.jobId,
+      input.result.engine || current.transcriptionEngine || '',
+      input.result.rawText || '',
+      input.result.cleanText || input.result.text || '',
+      input.result.formattedText || '',
+      input.result.summary || '',
+      input.result.markdownPath || current.markdownPath || '',
+      finishedAt,
+      JSON.stringify(normalizeScreenshotsForStorage(screenshots)),
+      finishedAt,
+      id
+    );
+
+    return this.requireVideo(id);
+  }
+
+  saveTranscriptionError(id: string, input: {
+    jobId: string;
+    error: string;
+    finishedAt?: number | undefined;
+  }): YouTubeVideo {
+    const finishedAt = input.finishedAt || this.now();
+
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET
+        status = 'error',
+        transcription_job_id = ?,
+        transcription_error = ?,
+        transcription_finished_at = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      input.jobId,
+      input.error,
+      finishedAt,
+      finishedAt,
+      id
+    );
+
+    return this.requireVideo(id);
+  }
+
+  updateTranscript(id: string, patch: VideoTranscriptPatch): YouTubeVideo {
+    this.requireVideo(id);
+    const now = this.now();
+
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET
+        summary = COALESCE(?, summary),
+        clean_text = COALESCE(?, clean_text),
+        formatted_text = COALESCE(?, formatted_text),
+        raw_text = COALESCE(?, raw_text),
+        markdown_path = COALESCE(?, markdown_path),
+        transcription_engine = COALESCE(?, transcription_engine),
+        transcription_finished_at = COALESCE(?, transcription_finished_at),
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      patch.summary ?? null,
+      patch.cleanText ?? null,
+      patch.formattedText ?? null,
+      patch.rawText ?? null,
+      patch.markdownPath ?? null,
+      patch.transcriptionEngine ?? null,
+      patch.transcriptionFinishedAt ?? null,
+      now,
+      id
+    );
+
+    return this.requireVideo(id);
+  }
+
+  setScreenshots(id: string, screenshots: VideoScreenshot[], trashedScreenshots: VideoScreenshot[]): YouTubeVideo {
+    this.requireVideo(id);
+    const now = this.now();
+
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET screenshots_json = ?, trashed_screenshots_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      JSON.stringify(normalizeScreenshotsForStorage(screenshots)),
+      JSON.stringify(normalizeScreenshotsForStorage(trashedScreenshots)),
+      now,
+      id
+    );
+
+    return this.requireVideo(id);
+  }
+
   private getByYouTubeVideoId(youtubeVideoId: string): YouTubeVideo | null {
     const row = this.db.prepare(`
       SELECT *
@@ -242,6 +416,14 @@ export class VideoLibraryStore {
     `).get(youtubeVideoId) as YouTubeVideoRow | undefined;
 
     return row ? mapYouTubeVideoRow(row) : null;
+  }
+
+  private requireVideo(id: string): YouTubeVideo {
+    const video = this.getVideoById(id);
+    if (!video) {
+      throw createHttpError(404, 'Видео не найдено.');
+    }
+    return video;
   }
 
   private saveMetadata(id: string, metadata: YouTubeVideoMetadata): void {
@@ -327,6 +509,9 @@ export class VideoLibraryStore {
 
   private ensureSchema(): void {
     this.db.exec(`
+      DROP TABLE IF EXISTS screenshots;
+      DROP TABLE IF EXISTS transcriptions;
+
       CREATE TABLE IF NOT EXISTS youtube_videos (
         id TEXT PRIMARY KEY,
         youtube_video_id TEXT NOT NULL UNIQUE,
@@ -358,6 +543,18 @@ export class VideoLibraryStore {
         raw_metadata_json TEXT NOT NULL DEFAULT '',
         metadata_fetched_at INTEGER,
         status TEXT NOT NULL CHECK (status IN ('added', 'processing', 'done', 'error')),
+        transcription_job_id TEXT NOT NULL DEFAULT '',
+        transcription_engine TEXT NOT NULL DEFAULT '',
+        raw_text TEXT NOT NULL DEFAULT '',
+        clean_text TEXT NOT NULL DEFAULT '',
+        formatted_text TEXT NOT NULL DEFAULT '',
+        summary TEXT NOT NULL DEFAULT '',
+        markdown_path TEXT NOT NULL DEFAULT '',
+        transcription_error TEXT NOT NULL DEFAULT '',
+        transcription_started_at INTEGER,
+        transcription_finished_at INTEGER,
+        screenshots_json TEXT NOT NULL DEFAULT '[]',
+        trashed_screenshots_json TEXT NOT NULL DEFAULT '[]',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -388,6 +585,18 @@ export class VideoLibraryStore {
     this.ensureColumn('formats_json', "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn('raw_metadata_json', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('metadata_fetched_at', 'INTEGER');
+    this.ensureColumn('transcription_job_id', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('transcription_engine', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('raw_text', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('clean_text', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('formatted_text', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('summary', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('markdown_path', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('transcription_error', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('transcription_started_at', 'INTEGER');
+    this.ensureColumn('transcription_finished_at', 'INTEGER');
+    this.ensureColumn('screenshots_json', "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn('trashed_screenshots_json', "TEXT NOT NULL DEFAULT '[]'");
   }
 
   private ensureColumn(name: string, definition: string): void {
@@ -472,13 +681,26 @@ interface YouTubeVideoRow {
   raw_metadata_json: string;
   metadata_fetched_at: number | null;
   status: string;
+  transcription_job_id: string;
+  transcription_engine: string;
+  raw_text: string;
+  clean_text: string;
+  formatted_text: string;
+  summary: string;
+  markdown_path: string;
+  transcription_error: string;
+  transcription_started_at: number | null;
+  transcription_finished_at: number | null;
+  screenshots_json: string;
+  trashed_screenshots_json: string;
   created_at: number;
   updated_at: number;
 }
 
 function mapYouTubeVideoRow(row: YouTubeVideoRow): YouTubeVideo {
+  const id = row.id;
   return {
-    id: row.id,
+    id,
     youtubeVideoId: row.youtube_video_id,
     url: row.url,
     title: row.title || '',
@@ -507,6 +729,18 @@ function mapYouTubeVideoRow(row: YouTubeVideoRow): YouTubeVideo {
     formats: parseFormats(row.formats_json),
     metadataFetchedAt: nullableNumber(row.metadata_fetched_at),
     status: row.status === 'processing' || row.status === 'done' || row.status === 'error' ? row.status : 'added',
+    transcriptionJobId: row.transcription_job_id || '',
+    transcriptionEngine: row.transcription_engine || '',
+    rawText: row.raw_text || '',
+    cleanText: row.clean_text || '',
+    formattedText: row.formatted_text || '',
+    summary: row.summary || '',
+    markdownPath: row.markdown_path || '',
+    transcriptionError: row.transcription_error || '',
+    transcriptionStartedAt: nullableNumber(row.transcription_started_at),
+    transcriptionFinishedAt: nullableNumber(row.transcription_finished_at),
+    screenshots: parseScreenshots(row.screenshots_json, id, 'active'),
+    trashedScreenshots: parseScreenshots(row.trashed_screenshots_json, id, 'trash'),
     createdAt: Number(row.created_at) || 0,
     updatedAt: Number(row.updated_at) || Number(row.created_at) || 0
   };
@@ -535,6 +769,48 @@ function parseFormats(value: string | null | undefined): VideoFormat[] {
   } catch {
     return [];
   }
+}
+
+function parseScreenshots(
+  value: string | null | undefined,
+  videoId: string,
+  scope: 'active' | 'trash'
+): VideoScreenshot[] {
+  try {
+    const parsed: unknown = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => normalizeScreenshot(item, videoId, scope))
+      .filter((item): item is VideoScreenshot => item !== null);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeScreenshot(
+  value: unknown,
+  videoId: string,
+  scope: 'active' | 'trash'
+): VideoScreenshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const screenshot = value as Partial<VideoScreenshot>;
+  if (typeof screenshot.fileName !== 'string' || !/^[^/\\]+\.jpg$/i.test(screenshot.fileName)) return null;
+
+  return {
+    fileName: screenshot.fileName,
+    timestampSeconds: nullableNumber(screenshot.timestampSeconds) || 0,
+    exists: typeof screenshot.exists === 'boolean' ? screenshot.exists : true,
+    url: `/videos/library/${encodeURIComponent(videoId)}/screenshots/${scope}/${encodeURIComponent(screenshot.fileName)}`
+  };
+}
+
+function normalizeScreenshotsForStorage(screenshots: VideoScreenshot[]): Array<{ fileName: string; timestampSeconds: number }> {
+  return screenshots
+    .filter((screenshot) => /^[^/\\]+\.jpg$/i.test(screenshot.fileName))
+    .map((screenshot) => ({
+      fileName: screenshot.fileName,
+      timestampSeconds: Number.isFinite(screenshot.timestampSeconds) ? screenshot.timestampSeconds : 0
+    }));
 }
 
 function isVideoFormat(value: unknown): value is VideoFormat {

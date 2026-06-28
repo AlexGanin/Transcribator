@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -268,6 +269,88 @@ describe('YouTube video library store', () => {
       assert.equal(videos[0]?.durationSeconds, 654);
       assert.deepEqual(videos[0]?.tags, ['existing']);
       assert.equal(videos[0]?.metadataFetchedAt, 123456);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('drops legacy history tables when opening the video library store', async () => {
+    const dbPath = await tempDbPath();
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE transcriptions (id TEXT PRIMARY KEY);
+      CREATE TABLE screenshots (id TEXT PRIMARY KEY);
+    `);
+    db.close();
+
+    const store = createVideoLibraryStore({ dbPath });
+
+    try {
+      const dbAfter = new DatabaseSync(dbPath);
+      try {
+        const tables = dbAfter.prepare(`
+          SELECT name
+          FROM sqlite_master
+          WHERE type = 'table'
+          ORDER BY name
+        `).all() as Array<{ name: string }>;
+
+        assert.deepEqual(tables.map((table) => table.name), ['youtube_videos']);
+      } finally {
+        dbAfter.close();
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it('stores transcription fields and screenshots on the YouTube video row', async () => {
+    const store = createVideoLibraryStore({ dbPath: await tempDbPath(), now: () => 1000 });
+
+    try {
+      const added = store.addVideo({
+        url: 'https://www.youtube.com/watch?v=transcr123',
+        title: 'Видео для транскрибации'
+      });
+
+      const processing = store.markTranscriptionProcessing(added.video.id, {
+        jobId: 'job-1',
+        engine: 'mlx-whisper',
+        startedAt: 900
+      });
+
+      assert.equal(processing.status, 'processing');
+      assert.equal(processing.transcriptionJobId, 'job-1');
+      assert.equal(processing.transcriptionEngine, 'mlx-whisper');
+      assert.equal(processing.transcriptionStartedAt, 900);
+
+      const done = store.saveTranscriptionResult(added.video.id, {
+        jobId: 'job-1',
+        finishedAt: 1200,
+        result: {
+          rawText: 'Raw transcript',
+          cleanText: 'Clean transcript',
+          formattedText: '',
+          summary: '',
+          source: 'https://www.youtube.com/watch?v=transcr123',
+          engine: 'mlx-whisper',
+          screenshots: [
+            {
+              fileName: 'frame-0001.jpg',
+              timestampSeconds: 30,
+              exists: true,
+              url: ''
+            }
+          ],
+          screenshotsCount: 1
+        }
+      });
+
+      assert.equal(done.status, 'done');
+      assert.equal(done.rawText, 'Raw transcript');
+      assert.equal(done.cleanText, 'Clean transcript');
+      assert.equal(done.transcriptionFinishedAt, 1200);
+      assert.equal(done.screenshots[0]?.url, `/videos/library/${encodeURIComponent(added.video.id)}/screenshots/active/frame-0001.jpg`);
     } finally {
       store.close();
     }

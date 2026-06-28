@@ -1,6 +1,6 @@
 # Transcribator
 
-Локальный pnpm workspace для транскрибации медиа, хранения истории транскрибаций и скачивания YouTube-видео.
+Локальный pnpm workspace для транскрибации медиа, единой YouTube-видеотеки с транскриптами и скачивания YouTube-видео.
 
 ## Что умеет проект
 
@@ -11,7 +11,7 @@
 - `packages/api-client`: fetch-клиент, который используют CRM и extension.
 - `packages/ui`: shadcn-style React UI primitives на Tailwind и Radix, плюс Storybook UI Kit.
 
-Express API отвечает за всю транскрибацию и видео-логику: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, Server-Sent Events, историю, YouTube video backlog и скачивания.
+Express API отвечает за всю транскрибацию и видео-логику: `yt-dlp`, `ffmpeg`, Whisper-движки, uploads, Server-Sent Events, YouTube video backlog, транскрипты видео и скачивания.
 
 ## Системные требования
 
@@ -60,11 +60,11 @@ http://127.0.0.1:2001
 
 Runtime-файлы пишутся в корневую папку `runtime/`:
 
-- `runtime/transcribator.sqlite`: основной SQLite-индекс транскрибаций, скриншотов и добавленных YouTube-видео
+- `runtime/transcribator.sqlite`: основной SQLite-индекс добавленных YouTube-видео, их metadata, транскриптов и скриншотов
 - `runtime/source/`: копии загруженных исходных медиа
 - `runtime/tmp/`: uploads, WAV-файлы и папки вывода Whisper
-- `runtime/output/`: legacy `history.json` для одноразовой миграции старых записей
-- `runtime/artifacts/`: Markdown-артефакты и screenshots/trash для записей истории
+- `runtime/output/`: legacy-каталог; новые транскрипты здесь не сохраняются
+- `runtime/artifacts/`: Markdown-артефакты и screenshots/trash для видео по `runtime/artifacts/<video-id>/`
 - `runtime/downloads/`: скачанные видео
 - `runtime/compressed/`: локальные видео, сжатые через Apple VideoToolbox HEVC/H.265
 - `runtime/obsidian/`: legacy Obsidian-ready заметки старых записей
@@ -135,12 +135,6 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `GET` | `/health` | Health-check API |
 | `POST` | `/transcribe/url` | Запустить транскрибацию URL |
 | `POST` | `/transcribe/file` | Запустить транскрибацию загруженного файла |
-| `GET` | `/transcribe/history` | Прочитать сохраненную историю |
-| `GET` | `/transcribe/history/:id` | Прочитать деталку записи из SQLite |
-| `PATCH` | `/transcribe/history/:id` | Обновить редактируемые поля записи |
-| `DELETE` | `/transcribe/history/:id` | Удалить запись истории и ее `runtime/artifacts/<id>/` |
-| `POST` | `/transcribe/history/:id/format` | Запустить placeholder-нейроформатирование |
-| `POST` | `/transcribe/history/:id/markdown` | Создать `runtime/artifacts/<id>/transcript.md` |
 | `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |
 | `GET` | `/jobs/:id/events` | Нейтральный SSE-поток прогресса job |
 | `POST` | `/videos/formats` | Получить доступные форматы видео |
@@ -149,12 +143,20 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `GET` | `/videos/library/check` | Проверить, добавлено ли YouTube-видео по URL |
 | `GET` | `/videos/library/:id` | Получить детальную карточку видео и кэшированные `yt-dlp` metadata |
 | `POST` | `/videos/library/:id/metadata` | Обновить metadata добавленного YouTube-видео через `yt-dlp` |
+| `POST` | `/videos/library/:id/transcribe` | Запустить транскрибацию добавленного YouTube-видео |
+| `PATCH` | `/videos/library/:id/transcript` | Обновить текстовые поля транскрипта видео |
+| `POST` | `/videos/library/:id/format` | Запустить placeholder-нейроформатирование транскрипта видео |
+| `POST` | `/videos/library/:id/markdown` | Создать `runtime/artifacts/<video-id>/transcript.md` |
+| `POST` | `/videos/library/:id/screenshots/trash` | Перенести скриншоты видео в корзину |
+| `POST` | `/videos/library/:id/screenshots/restore` | Вернуть скриншоты видео из корзины |
+| `DELETE` | `/videos/library/:id/screenshots/trash` | Очистить корзину скриншотов видео |
+| `GET` | `/videos/library/:id/screenshots/:scope/:fileName` | Отдать JPEG-скриншот видео |
 | `POST` | `/videos/library` | Добавить YouTube-видео из расширения в CRM |
 | `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 
 Для `/transcribe/url` и `/transcribe/file` можно передать `screenshotsEnabled=true` и `screenshotIntervalSeconds=30`.
-Тогда API создает скриншоты в `runtime/artifacts/<transcription-id>/screenshots/`.
-Markdown больше не создается автоматически: его нужно создать отдельной кнопкой в истории, и он собирается из данных SQLite.
+Для сохраненного YouTube-видео CRM запускает транскрибацию через `/videos/library/:id/transcribe`, а API сохраняет результат в той же строке `youtube_videos`.
+Markdown больше не создается автоматически: его нужно создать отдельной кнопкой в деталке видео, и он собирается из данных SQLite.
 
 ## Структура проекта
 

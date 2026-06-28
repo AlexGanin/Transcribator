@@ -2,10 +2,8 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { EventEmitter } from 'node:events';
 import type { Writable } from 'node:stream';
 import type {
-  HistoryEntry,
   JobStatus as SharedJobStatus,
   ProgressEvent,
-  StageSummary,
   TranscriptionEngine,
   TranscriptionResult,
   VideoCompressionPreset,
@@ -13,7 +11,6 @@ import type {
 } from '@transcribator/shared';
 
 export type JobStatus = SharedJobStatus;
-export type TerminalJobStatus = Extract<JobStatus, 'done' | 'error'>;
 
 export interface JobMetadata {
   sourceType?: 'url' | 'file' | 'video-compression' | undefined;
@@ -47,10 +44,6 @@ export interface JobTaskContext {
 
 export type JobTask = (onProgress: ProgressHandler, context: JobTaskContext) => Promise<TranscriptionResult>;
 
-export interface CreateJobOptions {
-  persistHistory?: boolean | undefined;
-}
-
 export interface TranscriptionOptions {
   engine?: TranscriptionEngine | undefined;
   onProgress?: ProgressHandler | undefined;
@@ -58,6 +51,7 @@ export interface TranscriptionOptions {
   startedAt?: number | undefined;
   screenshotsEnabled?: boolean | undefined;
   screenshotIntervalSeconds?: number | undefined;
+  artifactId?: string | undefined;
 }
 
 export interface TranscriptSegment {
@@ -135,6 +129,4 @@ export interface YtDlpVideoInfo {
 }
 
 export type NormalizedVideoFormat = VideoFormat;
-export type HistoryStageSummary = StageSummary;
-export type JobHistoryEntry = HistoryEntry;
 export type JobTranscriptionResult = TranscriptionResult;
