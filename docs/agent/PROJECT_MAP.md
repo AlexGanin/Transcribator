@@ -173,7 +173,6 @@ apps/crm
 apps/extension
   entrypoints/
     background.ts
-    content.ts
     popup/
       index.html
       main.tsx
@@ -188,10 +187,8 @@ apps/extension
 - WXT + React + TypeScript Manifest V3 extension.
 - Popup использует `@transcribator/api-client` и содержит отдельную кнопку «Добавить видео» для сохранения текущего YouTube-ролика в backlog без запуска транскрибации.
 - Background service worker хранит defaults extension; popup хранит последний YouTube URL в extension storage.
-- YouTube content script использует Shadow DOM style isolation.
-- YouTube content script показывает кнопку «Добавить видео» на video/shorts/live страницах, проверяет `/videos/library/check` и добавляет видео через `/videos/library`.
-- YouTube content script не использует `browser.runtime.sendMessage`, чтобы stale content script после перезагрузки расширения не ломал кнопку.
-- YouTube metadata helper читает канал из owner DOM markup и fallback `ytInitialPlayerResponse.videoDetails.author`.
+- Расширение не инжектит плавающую кнопку на YouTube-страницы и не запрашивает YouTube host permission; добавление видео выполняется из popup.
+- YouTube helper нормализует ссылки, video id и thumbnail URL для popup action.
 - `src/api-base-url.ts` держит дефолт `http://127.0.0.1:2001` и мигрирует старый локальный дефолт `3001`.
 - Remote hosted code не используется.
 
@@ -206,7 +203,7 @@ apps/extension
 ### `packages/api-client`
 
 - Чистый fetch-based client.
-- Работает в Next CRM, extension popup/background/content scripts и обычных browser contexts.
+- Работает в Next CRM, extension popup/background и обычных browser contexts.
 - Импортирует и валидирует данные схемами из `packages/shared`.
 - Нормализует failed responses в `ApiClientError`.
 - Не должен импортировать React, TanStack Query, Next APIs, Chrome APIs или Node-only APIs.
@@ -289,9 +286,7 @@ CRM video URL
 
 ```txt
 YouTube watch/shorts/live page
-  -> apps/extension content script Shadow DOM button
-  -> GET /videos/library/check?url=<canonical-youtube-url>
-  -> button state: Добавить или Добавлено
+  -> apps/extension popup button "Добавить видео"
   -> POST /videos/library
   -> shared Zod validation
   -> videoLibrary.addVideo

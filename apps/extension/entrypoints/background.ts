@@ -5,12 +5,4 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     void browser.storage.local.set({ transcribatorApiBaseUrl: 'http://127.0.0.1:2001' });
   });
-
-  browser.runtime.onMessage.addListener((message) => {
-    if (message?.type !== 'TRANSCRIBATOR_YOUTUBE_URL' || typeof message.url !== 'string') {
-      return;
-    }
-
-    void browser.storage.local.set({ transcribatorLastYouTubeUrl: message.url });
-  });
 });

@@ -2,6 +2,12 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-07-04
+
+- Удалено: YouTube content script расширения с плавающей кнопкой «Добавить видео» в правом нижнем углу страницы; добавление видео остается доступно из popup расширения, а manifest больше не запрашивает YouTube host permission.
+- Проверено: `pnpm --filter @transcribator/extension check`; `git diff --check`.
+- Документация: обновлены `docs/agent/PROJECT_MAP.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-06-28
 
 - Изменено: отдельная история транскрибаций удалена из API и CRM; `youtube_videos` стала единой таблицей YouTube-видео, metadata, transcript-полей, Markdown path и JSON-скриншотов, а `/videos` получил запуск транскрибации и редактор транскрипта.
