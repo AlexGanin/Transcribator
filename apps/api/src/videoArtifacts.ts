@@ -180,9 +180,14 @@ function buildVideoMarkdown(video: YouTubeVideo): string {
     '',
     '## Метаданные',
     '',
-    `- YouTube URL: \`${video.webpageUrl || video.url}\``,
-    `- YouTube ID: \`${video.youtubeVideoId}\``,
-    `- Channel: \`${video.channelTitle || video.uploader || 'unknown'}\``,
+    `- Source type: \`${video.sourceType}\``,
+    video.sourceType === 'youtube'
+      ? `- YouTube URL: \`${video.webpageUrl || video.url}\``
+      : `- Source file: \`${video.originalFileName || video.sourcePath || 'unknown'}\``,
+    video.sourceType === 'youtube'
+      ? `- YouTube ID: \`${video.youtubeVideoId}\``
+      : `- Source path: \`${video.sourcePath || 'unknown'}\``,
+    `- Channel/source: \`${video.channelTitle || video.uploader || 'unknown'}\``,
     `- Engine: \`${video.transcriptionEngine || 'unknown'}\``,
     `- Created at: \`${new Date(video.transcriptionStartedAt || video.createdAt).toISOString()}\``
   ];

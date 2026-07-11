@@ -1,5 +1,7 @@
 export const ALL_YOUTUBE_CHANNELS_ID = 'all';
 export const UNCATEGORIZED_YOUTUBE_CHANNEL_ID = '__uncategorized__';
+export const DEFAULT_TRANSCRIPTION_SOURCE_ID = '__transcriptions__';
+export const DEFAULT_TRANSCRIPTION_SOURCE_LABEL = 'Транскрибации';
 
 export interface YouTubeChannelFilter {
   id: string;
@@ -8,6 +10,7 @@ export interface YouTubeChannelFilter {
 }
 
 export interface YouTubeChannelVideo {
+  sourceType?: 'youtube' | 'file' | undefined;
   channelTitle?: string | undefined;
   uploader?: string | undefined;
 }
@@ -38,6 +41,10 @@ export function filterYouTubeVideosByChannel<T extends YouTubeChannelVideo>(vide
 
 function getYouTubeVideoChannel(video: YouTubeChannelVideo): Pick<YouTubeChannelFilter, 'id' | 'label'> {
   const label = normalizeChannelLabel(video.channelTitle) || normalizeChannelLabel(video.uploader);
+  if (!label && video.sourceType === 'file') {
+    return { id: DEFAULT_TRANSCRIPTION_SOURCE_ID, label: DEFAULT_TRANSCRIPTION_SOURCE_LABEL };
+  }
+
   if (!label) {
     return { id: UNCATEGORIZED_YOUTUBE_CHANNEL_ID, label: 'Без канала' };
   }

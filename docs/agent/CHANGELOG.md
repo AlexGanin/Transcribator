@@ -2,6 +2,20 @@
 
 Этот changelog хранит агентские изменения документации и проектных знаний.
 
+## 2026-07-11
+
+- Изменено: в CRM `/videos` удалены отдельные кнопки «Открыть»/«Открыть YouTube», а badge источника `YouTube` стал кликабельной ссылкой на ролик.
+- Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
+- Документация: обновлен `docs/agent/CHANGELOG.md`.
+
+## 2026-07-09
+
+- Изменено: обычная URL-транскрибация YouTube-ссылок теперь автоматически добавляет или дедуплицирует видео в `youtube_videos`, а транскрибация локальных upload-файлов создает `sourceType=file` запись; оба сценария сохраняют результат в CRM `/videos`.
+- Изменено: локальные upload-транскрибации получают дефолтный источник/плейлист `Транскрибации`, чтобы сразу отображаться в одноименной группе CRM `/videos`.
+- Изменено: карточка видео в CRM умеет редактировать `title`, `description` и `channelTitle`, чтобы локальные записи можно было дозаполнить после транскрибации.
+- Проверено: точечный `pnpm --filter @transcribator/api exec node --test --import tsx src/videoTranscription.test.ts`; `pnpm --filter @transcribator/api typecheck`; `pnpm --filter @transcribator/api test`; `pnpm --filter @transcribator/api build`; `pnpm --filter @transcribator/shared check`; `pnpm --filter @transcribator/api-client check`; `pnpm --filter @transcribator/crm check`; точечные `node --test --import tsx ../crm/src/components/youtube-video-channels.test.ts` и `node --test --import tsx ../../packages/api-client/src/index.test.ts` из `apps/api`; `git diff --check`.
+- Документация: обновлены `README.md`, `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 ## 2026-07-04
 
 - Удалено: YouTube content script расширения с плавающей кнопкой «Добавить видео» в правом нижнем углу страницы; добавление видео остается доступно из popup расширения, а manifest больше не запрашивает YouTube host permission.

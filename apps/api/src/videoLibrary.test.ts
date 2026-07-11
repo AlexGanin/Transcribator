@@ -72,6 +72,30 @@ describe('YouTube video library store', () => {
     }
   });
 
+  it('adds local files to the video library', async () => {
+    const store = createVideoLibraryStore({ dbPath: await tempDbPath(), now: () => 123456 });
+
+    try {
+      const added = store.addLocalFile({
+        originalFileName: 'meeting-recording.mp4',
+        sourcePath: '/tmp/transcribator/meeting-recording.mp4'
+      });
+
+      assert.equal(added.alreadyAdded, false);
+      assert.equal(added.video.sourceType, 'file');
+      assert.equal(added.video.title, 'meeting-recording.mp4');
+      assert.equal(added.video.channelTitle, 'Транскрибации');
+      assert.equal(added.video.originalFileName, 'meeting-recording.mp4');
+      assert.equal(added.video.sourcePath, '/tmp/transcribator/meeting-recording.mp4');
+      assert.equal(added.video.youtubeVideoId, `file:${added.video.id}`);
+      assert.match(added.video.url, /^file:\/\//);
+      assert.equal(added.video.status, 'added');
+      assert.equal(store.listVideos()[0]?.id, added.video.id);
+    } finally {
+      store.close();
+    }
+  });
+
   it('loads, stores and returns detailed YouTube metadata by video id', async () => {
     const store = createVideoLibraryStore({
       dbPath: await tempDbPath(),
@@ -351,6 +375,32 @@ describe('YouTube video library store', () => {
       assert.equal(done.cleanText, 'Clean transcript');
       assert.equal(done.transcriptionFinishedAt, 1200);
       assert.equal(done.screenshots[0]?.url, `/videos/library/${encodeURIComponent(added.video.id)}/screenshots/active/frame-0001.jpg`);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('updates editable video card fields with transcript fields', async () => {
+    const store = createVideoLibraryStore({ dbPath: await tempDbPath(), now: () => 2000 });
+
+    try {
+      const added = store.addLocalFile({
+        originalFileName: 'raw-recording.mov',
+        sourcePath: '/tmp/transcribator/raw-recording.mov'
+      });
+
+      const updated = store.updateTranscript(added.video.id, {
+        title: 'Интервью с клиентом',
+        description: 'Контекст для последующей ручной разметки.',
+        channelTitle: 'Локальные интервью',
+        cleanText: 'Clean transcript'
+      });
+
+      assert.equal(updated.title, 'Интервью с клиентом');
+      assert.equal(updated.description, 'Контекст для последующей ручной разметки.');
+      assert.equal(updated.channelTitle, 'Локальные интервью');
+      assert.equal(updated.cleanText, 'Clean transcript');
+      assert.equal(updated.updatedAt, 2000);
     } finally {
       store.close();
     }

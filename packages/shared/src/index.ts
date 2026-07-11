@@ -61,6 +61,7 @@ export const stageSummarySchema = z.object({
 
 export const videoCompressionPresetSchema = z.enum(['high', 'balanced', 'small']);
 export const youtubeVideoStatusSchema = z.enum(['added', 'processing', 'done', 'error']);
+export const videoSourceTypeSchema = z.enum(['youtube', 'file']);
 
 export const screenshotFileNameSchema = z
   .string()
@@ -128,6 +129,9 @@ export const progressEventSchema = z.discriminatedUnion('type', [
 ]);
 
 export const updateYouTubeVideoTranscriptRequestSchema = z.object({
+  title: z.string().max(500).optional(),
+  description: z.string().optional(),
+  channelTitle: z.string().max(300).optional(),
   summary: z.string().optional(),
   cleanText: z.string().optional(),
   formattedText: z.string().optional(),
@@ -175,8 +179,11 @@ export const videoDownloadResponseSchema = z.object({
 
 export const youtubeVideoSchema = z.object({
   id: z.string(),
+  sourceType: videoSourceTypeSchema.default('youtube'),
   youtubeVideoId: z.string(),
-  url: z.string().url(),
+  url: z.string().min(1),
+  sourcePath: z.string().default(''),
+  originalFileName: z.string().default(''),
   title: z.string().default(''),
   description: z.string().default(''),
   channelTitle: z.string().default(''),
@@ -301,6 +308,7 @@ export type VideoFormatsResponse = z.infer<typeof videoFormatsResponseSchema>;
 export type VideoDownloadRequest = z.infer<typeof videoDownloadRequestSchema>;
 export type VideoDownloadResponse = z.infer<typeof videoDownloadResponseSchema>;
 export type YouTubeVideoStatus = z.infer<typeof youtubeVideoStatusSchema>;
+export type VideoSourceType = z.infer<typeof videoSourceTypeSchema>;
 export type YouTubeVideo = z.infer<typeof youtubeVideoSchema>;
 export type YouTubeVideoCreateRequest = z.infer<typeof youtubeVideoCreateRequestSchema>;
 export type YouTubeVideoListResponse = z.infer<typeof youtubeVideoListResponseSchema>;

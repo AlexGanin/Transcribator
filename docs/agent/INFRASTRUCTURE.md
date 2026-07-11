@@ -119,7 +119,7 @@ pipx install mlx-whisper
 
 | Путь | Кто использует | Что появляется внутри |
 | --- | --- | --- |
-| `runtime/transcribator.sqlite` | `apps/api/src/videoLibrary.ts`, `apps/api/src/videoTranscription.ts`, `apps/api/src/videoArtifacts.ts` | Единый источник правды для YouTube video backlog и результатов транскрибации. Таблица `youtube_videos` хранит добавленные из расширения ролики, дедуплицирует их по `youtube_video_id`, кэширует детальные `yt-dlp` metadata для CRM `/videos/[id]`, а также хранит status, job id, engine, raw/clean/formatted text, summary, markdown path, timestamps, error и JSON-списки active/trash screenshots. Legacy-таблицы `transcriptions` и `screenshots` удаляются при старте API без миграции. |
+| `runtime/transcribator.sqlite` | `apps/api/src/videoLibrary.ts`, `apps/api/src/videoTranscription.ts`, `apps/api/src/videoArtifacts.ts` | Единый источник правды для CRM `/videos` и результатов транскрибации. Таблица `youtube_videos` хранит YouTube-ролики (`sourceType=youtube`) и локальные upload-файлы (`sourceType=file`), дедуплицирует YouTube по `youtube_video_id`, хранит `source_path`/`original_file_name` для локальных файлов, задает локальным upload-транскрибациям дефолтный `channel_title`/источник `Транскрибации`, кэширует детальные `yt-dlp` metadata для YouTube-карточек, а также хранит status, job id, engine, raw/clean/formatted text, summary, markdown path, timestamps, error и JSON-списки active/trash screenshots. Legacy-таблицы `transcriptions` и `screenshots` удаляются при старте API без миграции. |
 | `runtime/source/` | `apps/api/src/pipeline.ts` | Копии файлов, которые пользователь отправил на транскрибацию через upload. API сохраняет их под безопасным именем файла, чтобы исходник можно было повторно обработать или сверить с результатом. |
 | `runtime/tmp/` | `multer`, `apps/api/src/index.ts`, `apps/api/src/pipeline.ts` | Временные upload-файлы, WAV-файлы после конвертации через `ffmpeg`, а также рабочие папки CLI-движков Whisper. Эти данные нужны только во время обработки и могут очищаться после завершения задач. |
 | `runtime/output/` | legacy | Legacy-каталог. Новые итоговые `.txt`-транскрипты и `history.json` больше не создаются и не мигрируются. |
@@ -137,18 +137,18 @@ pipx install mlx-whisper
 | Метод | Путь | Назначение |
 | --- | --- | --- |
 | `GET` | `/health` | Базовый health response API |
-| `POST` | `/transcribe/url` | Запустить URL transcription job |
-| `POST` | `/transcribe/file` | Запустить uploaded file transcription job |
+| `POST` | `/transcribe/url` | Запустить URL transcription job; YouTube-ссылки автоматически добавляются/дедуплицируются в `youtube_videos` и после завершения появляются в CRM `/videos` с сохраненным транскриптом |
+| `POST` | `/transcribe/file` | Запустить uploaded file transcription job; локальный файл сохраняется в `runtime/source/`, получает `sourceType=file` запись в `youtube_videos` с источником `Транскрибации` и после завершения появляется в CRM `/videos` с сохраненным транскриптом |
 | `GET` | `/transcribe/jobs/:id/events` | Server-Sent Events stream для job progress |
 | `GET` | `/jobs/:id/events` | Нейтральный Server-Sent Events stream для job progress |
 | `POST` | `/videos/formats` | Вернуть доступные video download formats |
 | `POST` | `/videos/download` | Скачать выбранный video format в `runtime/downloads/` |
-| `GET` | `/videos/library` | Вернуть YouTube video backlog для CRM `/videos` |
+| `GET` | `/videos/library` | Вернуть видеотеку для CRM `/videos`: YouTube-ролики и локальные файлы |
 | `GET` | `/videos/library/check` | Проверить по URL, добавлено ли YouTube-видео |
-| `GET` | `/videos/library/:id` | Вернуть детальную карточку добавленного YouTube-видео; если metadata еще нет, попробовать загрузить ее через `yt-dlp --dump-json` и закэшировать |
-| `POST` | `/videos/library/:id/metadata` | Принудительно обновить кэш metadata добавленного YouTube-видео |
-| `POST` | `/videos/library/:id/transcribe` | Запустить transcription job для добавленного YouTube-видео и сохранить результат в `youtube_videos` |
-| `PATCH` | `/videos/library/:id/transcript` | Обновить `summary`, `formattedText`, `cleanText`, `rawText` у видео |
+| `GET` | `/videos/library/:id` | Вернуть детальную карточку сохраненной записи; для YouTube при отсутствии metadata попробовать загрузить ее через `yt-dlp --dump-json` и закэшировать |
+| `POST` | `/videos/library/:id/metadata` | Принудительно обновить кэш metadata YouTube-записи; для локальных file-записей возвращает текущую карточку без `yt-dlp` |
+| `POST` | `/videos/library/:id/transcribe` | Запустить transcription job для сохраненного YouTube-видео или локального файла и сохранить результат в `youtube_videos` |
+| `PATCH` | `/videos/library/:id/transcript` | Обновить поля карточки `title`, `description`, `channelTitle` и transcript-поля `summary`, `formattedText`, `cleanText`, `rawText` у видео |
 | `POST` | `/videos/library/:id/format` | Placeholder AI step: fake delay и заполнение `formattedText` текущим лучшим текстом |
 | `POST` | `/videos/library/:id/markdown` | Сгенерировать `runtime/artifacts/<video-id>/transcript.md` из SQLite |
 | `POST` | `/videos/library/:id/screenshots/trash` | Перенести выбранные active screenshots видео в `trash/screenshots` и обновить JSON в SQLite |

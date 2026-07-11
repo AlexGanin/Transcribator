@@ -18,7 +18,7 @@ import {
   youtubeVideoCreateRequestSchema,
   youtubeVideoTranscriptionRequestSchema
 } from '@transcribator/shared';
-import { ensureRuntimeDirs, transcribeFile, transcribeUrl } from './pipeline.js';
+import { ensureRuntimeDirs, transcribeUrl } from './pipeline.js';
 import { createJob, getJob } from './jobs.js';
 import { compressVideo, ensureCompressedDir } from './videoCompression.js';
 import { downloadVideo, ensureDownloadDir, getVideoFormats } from './videoDownload.js';
@@ -58,6 +58,12 @@ app.get('/health', (_req: Request, res: Response) => {
 app.post('/transcribe/url', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = urlTranscriptionRequestSchema.parse(req.body || {});
+    const libraryJob = await videoTranscriptionService.startFromUrl(body.url, body);
+    if (libraryJob) {
+      res.status(202).json({ jobId: libraryJob.jobId });
+      return;
+    }
+
     const job = createJob(
       (onProgress, context) => transcribeUrl(body.url, {
         engine: body.engine,
@@ -78,18 +84,8 @@ app.post('/transcribe/url', async (req: Request, res: Response, next: NextFuncti
 app.post('/transcribe/file', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = fileTranscriptionRequestSchema.parse(req.body || {});
-    const job = createJob(
-      (onProgress, context) => transcribeFile(req.file, {
-        engine: body.engine,
-        screenshotsEnabled: body.screenshotsEnabled,
-        screenshotIntervalSeconds: body.screenshotIntervalSeconds,
-        jobId: context.jobId,
-        startedAt: context.startedAt,
-        onProgress
-      }),
-      buildJobMetadata('file', req.file?.originalname, body.engine)
-    );
-    res.status(202).json({ jobId: job.id });
+    const libraryJob = await videoTranscriptionService.startFromFile(req.file, body);
+    res.status(202).json({ jobId: libraryJob.jobId });
   } catch (error) {
     next(error);
   }

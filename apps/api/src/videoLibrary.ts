@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHttpError } from './errors.js';
 import { DEFAULT_DB_PATH } from './runtimePaths.js';
@@ -10,6 +11,7 @@ import type { CommandResult, YtDlpVideoFormatObject } from './types.js';
 import type {
   TranscriptionResult,
   UpdateYouTubeVideoTranscriptRequest,
+  VideoSourceType,
   VideoFormat,
   VideoScreenshot,
   YouTubeVideo,
@@ -33,6 +35,12 @@ export interface CheckYouTubeVideoResult {
   video?: YouTubeVideo | undefined;
 }
 
+export interface LocalVideoCreateRequest {
+  originalFileName: string;
+  sourcePath: string;
+  title?: string | undefined;
+}
+
 export type YouTubeVideoMetadataFetcher = (url: string) => Promise<YouTubeVideoMetadata>;
 export type VideoTranscriptPatch = UpdateYouTubeVideoTranscriptRequest & {
   markdownPath?: string | undefined;
@@ -41,6 +49,7 @@ export type VideoTranscriptPatch = UpdateYouTubeVideoTranscriptRequest & {
 };
 
 const DEFAULT_LIST_METADATA_ENRICHMENT_LIMIT = 20;
+const DEFAULT_TRANSCRIPTION_SOURCE_LABEL = 'Транскрибации';
 
 export interface YouTubeVideoMetadata {
   title: string;
@@ -118,8 +127,11 @@ export class VideoLibraryStore {
 
     const video: YouTubeVideo = {
       id: randomUUID(),
+      sourceType: 'youtube',
       youtubeVideoId,
       url: normalizeYouTubeWatchUrl(youtubeVideoId),
+      sourcePath: '',
+      originalFileName: '',
       title: normalizeText(input.title),
       description: '',
       channelTitle: normalizeText(input.channelTitle),
@@ -165,19 +177,25 @@ export class VideoLibraryStore {
     this.db.prepare(`
       INSERT INTO youtube_videos (
         id,
+        source_type,
         youtube_video_id,
         url,
+        source_path,
+        original_file_name,
         title,
         channel_title,
         thumbnail_url,
         status,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       video.id,
+      video.sourceType,
       video.youtubeVideoId,
       video.url,
+      video.sourcePath,
+      video.originalFileName,
       video.title,
       video.channelTitle,
       video.thumbnailUrl,
@@ -195,6 +213,91 @@ export class VideoLibraryStore {
       ...result,
       video: await this.enrichMissingMetadata(result.video)
     };
+  }
+
+  addLocalFile(input: LocalVideoCreateRequest): AddYouTubeVideoResult {
+    const now = this.now();
+    const id = randomUUID();
+    const originalFileName = normalizeText(input.originalFileName) || 'Local file';
+    const sourcePath = normalizeText(input.sourcePath);
+    const video: YouTubeVideo = {
+      id,
+      sourceType: 'file',
+      youtubeVideoId: `file:${id}`,
+      url: sourcePath ? pathToFileURL(sourcePath).href : `file:${id}`,
+      sourcePath,
+      originalFileName,
+      title: normalizeText(input.title) || originalFileName,
+      description: '',
+      channelTitle: DEFAULT_TRANSCRIPTION_SOURCE_LABEL,
+      channelId: '',
+      channelUrl: '',
+      uploader: '',
+      uploaderId: '',
+      uploaderUrl: '',
+      thumbnailUrl: '',
+      durationSeconds: null,
+      durationLabel: '',
+      uploadDate: '',
+      timestamp: null,
+      viewCount: null,
+      likeCount: null,
+      commentCount: null,
+      categories: [],
+      tags: [],
+      language: '',
+      availability: '',
+      liveStatus: '',
+      ageLimit: null,
+      webpageUrl: '',
+      formats: [],
+      metadataFetchedAt: null,
+      status: 'added',
+      transcriptionJobId: '',
+      transcriptionEngine: '',
+      rawText: '',
+      cleanText: '',
+      formattedText: '',
+      summary: '',
+      markdownPath: '',
+      transcriptionError: '',
+      transcriptionStartedAt: null,
+      transcriptionFinishedAt: null,
+      screenshots: [],
+      trashedScreenshots: [],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.db.prepare(`
+      INSERT INTO youtube_videos (
+        id,
+        source_type,
+        youtube_video_id,
+        url,
+        source_path,
+        original_file_name,
+        title,
+        channel_title,
+        status,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      video.id,
+      video.sourceType,
+      video.youtubeVideoId,
+      video.url,
+      video.sourcePath,
+      video.originalFileName,
+      video.title,
+      video.channelTitle,
+      video.status,
+      video.createdAt,
+      video.updatedAt
+    );
+
+    return { video: this.requireVideo(id), alreadyAdded: false };
   }
 
   checkVideo(url: string): CheckYouTubeVideoResult {
@@ -217,6 +320,10 @@ export class VideoLibraryStore {
     const video = this.getVideoById(id);
     if (!video) {
       throw createHttpError(404, 'Видео не найдено.');
+    }
+
+    if (video.sourceType !== 'youtube') {
+      return { video };
     }
 
     if (!options.refresh && video.metadataFetchedAt) {
@@ -249,7 +356,7 @@ export class VideoLibraryStore {
   async listVideosWithMetadata(limit = 500): Promise<YouTubeVideo[]> {
     const videos = this.listVideos(limit);
     const missingMetadataVideos = videos
-      .filter((video) => !video.metadataFetchedAt)
+      .filter((video) => video.sourceType === 'youtube' && !video.metadataFetchedAt)
       .slice(0, DEFAULT_LIST_METADATA_ENRICHMENT_LIMIT);
 
     for (const video of missingMetadataVideos) {
@@ -366,6 +473,9 @@ export class VideoLibraryStore {
     this.db.prepare(`
       UPDATE youtube_videos
       SET
+        title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        channel_title = COALESCE(?, channel_title),
         summary = COALESCE(?, summary),
         clean_text = COALESCE(?, clean_text),
         formatted_text = COALESCE(?, formatted_text),
@@ -376,6 +486,9 @@ export class VideoLibraryStore {
         updated_at = ?
       WHERE id = ?
     `).run(
+      patch.title ?? null,
+      patch.description ?? null,
+      patch.channelTitle ?? null,
       patch.summary ?? null,
       patch.cleanText ?? null,
       patch.formattedText ?? null,
@@ -514,8 +627,11 @@ export class VideoLibraryStore {
 
       CREATE TABLE IF NOT EXISTS youtube_videos (
         id TEXT PRIMARY KEY,
+        source_type TEXT NOT NULL DEFAULT 'youtube' CHECK (source_type IN ('youtube', 'file')),
         youtube_video_id TEXT NOT NULL UNIQUE,
         url TEXT NOT NULL,
+        source_path TEXT NOT NULL DEFAULT '',
+        original_file_name TEXT NOT NULL DEFAULT '',
         title TEXT NOT NULL DEFAULT '',
         description TEXT NOT NULL DEFAULT '',
         channel_title TEXT NOT NULL DEFAULT '',
@@ -562,6 +678,9 @@ export class VideoLibraryStore {
       CREATE INDEX IF NOT EXISTS idx_youtube_videos_created_at
         ON youtube_videos(created_at DESC);
     `);
+    this.ensureColumn('source_type', "TEXT NOT NULL DEFAULT 'youtube'");
+    this.ensureColumn('source_path', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('original_file_name', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('description', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('channel_id', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('channel_url', "TEXT NOT NULL DEFAULT ''");
@@ -597,6 +716,11 @@ export class VideoLibraryStore {
     this.ensureColumn('transcription_finished_at', 'INTEGER');
     this.ensureColumn('screenshots_json', "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn('trashed_screenshots_json', "TEXT NOT NULL DEFAULT '[]'");
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET channel_title = ?
+      WHERE source_type = 'file' AND channel_title = ''
+    `).run(DEFAULT_TRANSCRIPTION_SOURCE_LABEL);
   }
 
   private ensureColumn(name: string, definition: string): void {
@@ -652,8 +776,11 @@ function normalizeText(value: string | undefined): string {
 
 interface YouTubeVideoRow {
   id: string;
+  source_type?: string | null;
   youtube_video_id: string;
   url: string;
+  source_path?: string | null;
+  original_file_name?: string | null;
   title: string;
   description: string;
   channel_title: string;
@@ -699,10 +826,14 @@ interface YouTubeVideoRow {
 
 function mapYouTubeVideoRow(row: YouTubeVideoRow): YouTubeVideo {
   const id = row.id;
+  const sourceType = normalizeSourceType(row.source_type);
   return {
     id,
+    sourceType,
     youtubeVideoId: row.youtube_video_id,
     url: row.url,
+    sourcePath: row.source_path || '',
+    originalFileName: row.original_file_name || '',
     title: row.title || '',
     description: row.description || '',
     channelTitle: row.channel_title || '',
@@ -751,6 +882,10 @@ function nullableNumber(value: unknown): number | null {
   if (typeof value !== 'number' && typeof value !== 'string') return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function normalizeSourceType(value: unknown): VideoSourceType {
+  return value === 'file' ? 'file' : 'youtube';
 }
 
 function parseStringArray(value: string | null | undefined): string[] {

@@ -82,6 +82,8 @@ apps/api
   - Биндится к `HOST` и `PORT`, по умолчанию `127.0.0.1:2001`.
   - Настраивает CORS, JSON parsing, multer uploads, route handlers, SSE и error handling.
   - Валидирует request bodies схемами из `@transcribator/shared`.
+  - Для `POST /transcribe/url` автоматически распознает YouTube-ссылки и отправляет их в video library flow, чтобы обычная URL-транскрибация сохранялась в `/videos`.
+  - Для `POST /transcribe/file` создает локальную запись в video library flow, чтобы upload-транскрибация тоже появлялась в `/videos`.
 
 - `src/jobs.ts`
   - In-memory job registry и event emitter layer.
@@ -107,14 +109,18 @@ apps/api
   - Скачивает выбранные formats в `runtime/downloads/`.
 
 - `src/videoLibrary.ts`
-  - Хранит добавленные из YouTube видео и результаты их транскрибации в единой таблице SQLite `youtube_videos`.
-  - Нормализует YouTube URL до canonical watch URL, дедуплицирует по `youtubeVideoId`, отдает список для CRM `/videos` и детальную карточку `/videos/[id]`.
-  - При добавлении сразу пытается сохранить полную metadata через `yt-dlp --dump-json`; при чтении списка дополнительно дозаполняет старые записи без `metadataFetchedAt`.
-  - Для детальной карточки кэширует metadata из `yt-dlp --dump-json`: описание, длительность, даты, статистику, канал, теги, категории, доступность и форматы.
+  - Хранит добавленные из YouTube видео, локальные upload-файлы и результаты их транскрибации в единой таблице SQLite `youtube_videos`.
+  - Различает записи по `sourceType`: `youtube` для YouTube-роликов и `file` для локальных файлов, сохраненных в `runtime/source/`.
+  - Для локальных file-записей задает дефолтный источник/плейлист `Транскрибации` через `channelTitle`.
+  - Нормализует YouTube URL до canonical watch URL, дедуплицирует YouTube по `youtubeVideoId`, создает локальные file-записи с синтетическим `youtubeVideoId = file:<id>`, отдает список для CRM `/videos` и детальную карточку `/videos/[id]`.
+  - При добавлении YouTube-видео сразу пытается сохранить полную metadata через `yt-dlp --dump-json`; при чтении списка дополнительно дозаполняет старые YouTube-записи без `metadataFetchedAt`.
+  - Для YouTube-детальной карточки кэширует metadata из `yt-dlp --dump-json`: описание, длительность, даты, статистику, канал, теги, категории, доступность и форматы; локальные file-записи metadata через `yt-dlp` не обновляют.
   - При старте удаляет legacy-таблицы `transcriptions` и `screenshots`; старые данные истории не мигрируются.
 
 - `src/videoTranscription.ts`
-  - Запускает транскрибацию конкретного YouTube-видео через `jobs.createJob`.
+  - Запускает транскрибацию конкретной сохраненной записи video library через `jobs.createJob`.
+  - Также умеет стартовать транскрибацию из произвольного URL: YouTube-ссылки добавляются/дедуплицируются в `youtube_videos`, остальные URL остаются transient jobs в `index.ts`.
+  - Также умеет стартовать транскрибацию из uploaded file: создает local file-запись, передает ее `id` как `artifactId`, сохраняет transcript и screenshots в этой строке.
   - Переводит строку `youtube_videos` в `processing`, а после `done`/`error` сохраняет тексты, engine, timestamps, screenshots JSON или ошибку.
 
 - `src/videoArtifacts.ts`
@@ -161,7 +167,8 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - YouTube video backlog на странице `/videos` с сайдбаром каналов, статусом транскрипта и кнопкой «Транскрибировать»
-  - детальная карточка `/videos/[id]` с YouTube metadata, запуском транскрибации, редактированием transcript-полей, Markdown action, галереей скриншотов и корзиной
+  - локальные file-записи в `/videos` после транскрибации upload-файлов; по умолчанию они группируются в источнике `Транскрибации`
+  - детальная карточка `/videos/[id]` с YouTube metadata или local file metadata, запуском транскрибации, редактированием полей карточки и transcript-полей, Markdown action, галереей скриншотов и корзиной
   - копирование текста `Clean Transcript` из текущего результата и деталки видео
   - video format selection
   - video downloads
@@ -238,15 +245,18 @@ CRM root Transcribator
   -> packages/api-client
   -> POST /transcribe/url
   -> shared Zod validation
+  -> if URL is YouTube, videoTranscriptionService.adds/deduplicates row in youtube_videos
   -> jobs.createJob
   -> pipeline.transcribeUrl
+  -> for YouTube artifactId = youtube_videos.id
   -> yt-dlp stdout
   -> ffmpeg stdin/stdout
   -> selected transcription engine
   -> postProcessTranscript
-  -> optional runtime/artifacts/<job-id>/screenshots/
+  -> optional runtime/artifacts/<video-id-or-job-id>/screenshots/
+  -> for YouTube, videoLibrary saves rawText, cleanText, formattedText, summary, engine, timestamps, screenshots JSON and status
   -> SSE progress/done events
-  -> CRM result panes without saved history row
+  -> CRM result panes; YouTube result also appears in CRM /videos
 ```
 
 ### File transcription
@@ -257,14 +267,19 @@ CRM multipart upload
   -> POST /transcribe/file
   -> shared Zod validation for form fields
   -> multer temp upload
+  -> videoTranscriptionService creates sourceType=file row in youtube_videos
+  -> default source/channelTitle = "Транскрибации"
   -> runtime/source/<safe_original_filename>
   -> jobs.createJob
   -> pipeline.transcribeFile
+  -> artifactId = youtube_videos.id
   -> ffmpeg conversion
   -> selected transcription engine
   -> postProcessTranscript
-  -> optional runtime/artifacts/<job-id>/screenshots/
+  -> optional runtime/artifacts/<video-id>/screenshots/
+  -> videoLibrary saves rawText, cleanText, formattedText, summary, engine, timestamps, screenshots JSON and status
   -> SSE progress/done events
+  -> CRM result panes; local file result also appears in CRM /videos
 ```
 
 ### Video download

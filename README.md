@@ -133,18 +133,18 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | Метод | Путь | Назначение |
 | --- | --- | --- |
 | `GET` | `/health` | Health-check API |
-| `POST` | `/transcribe/url` | Запустить транскрибацию URL |
-| `POST` | `/transcribe/file` | Запустить транскрибацию загруженного файла |
+| `POST` | `/transcribe/url` | Запустить транскрибацию URL; YouTube-ссылки автоматически сохраняются в CRM `/videos` |
+| `POST` | `/transcribe/file` | Запустить транскрибацию загруженного файла и сохранить локальную запись в CRM `/videos` |
 | `GET` | `/transcribe/jobs/:id/events` | SSE-поток прогресса |
 | `GET` | `/jobs/:id/events` | Нейтральный SSE-поток прогресса job |
 | `POST` | `/videos/formats` | Получить доступные форматы видео |
 | `POST` | `/videos/download` | Скачать выбранный формат в `runtime/downloads/` |
-| `GET` | `/videos/library` | Получить добавленные из YouTube видео для CRM `/videos` |
+| `GET` | `/videos/library` | Получить видеотеку CRM `/videos`: YouTube-ролики и локальные файлы |
 | `GET` | `/videos/library/check` | Проверить, добавлено ли YouTube-видео по URL |
 | `GET` | `/videos/library/:id` | Получить детальную карточку видео и кэшированные `yt-dlp` metadata |
 | `POST` | `/videos/library/:id/metadata` | Обновить metadata добавленного YouTube-видео через `yt-dlp` |
-| `POST` | `/videos/library/:id/transcribe` | Запустить транскрибацию добавленного YouTube-видео |
-| `PATCH` | `/videos/library/:id/transcript` | Обновить текстовые поля транскрипта видео |
+| `POST` | `/videos/library/:id/transcribe` | Запустить повторную транскрибацию сохраненного YouTube-видео или локального файла |
+| `PATCH` | `/videos/library/:id/transcript` | Обновить поля карточки и текстовые поля транскрипта видео |
 | `POST` | `/videos/library/:id/format` | Запустить placeholder-нейроформатирование транскрипта видео |
 | `POST` | `/videos/library/:id/markdown` | Создать `runtime/artifacts/<video-id>/transcript.md` |
 | `POST` | `/videos/library/:id/screenshots/trash` | Перенести скриншоты видео в корзину |
@@ -155,7 +155,9 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
 | `POST` | `/videos/compress` | Сжать локальный видеофайл в `runtime/compressed/` |
 
 Для `/transcribe/url` и `/transcribe/file` можно передать `screenshotsEnabled=true` и `screenshotIntervalSeconds=30`.
-Для сохраненного YouTube-видео CRM запускает транскрибацию через `/videos/library/:id/transcribe`, а API сохраняет результат в той же строке `youtube_videos`.
+Если `/transcribe/url` получает YouTube-ссылку, API добавляет или дедуплицирует видео в `youtube_videos` и сохраняет результат транскрибации в этой строке; для не-YouTube URL результат остается одноразовым SSE-job.
+Если `/transcribe/file` получает локальный аудио/видеофайл, API создает локальную запись в `youtube_videos` с `sourceType=file`, источником/плейлистом `Транскрибации`, сохраняет исходник в `runtime/source/` и пишет результат транскрибации в эту запись.
+Для уже сохраненного YouTube-видео CRM также может запускать транскрибацию через `/videos/library/:id/transcribe`.
 Markdown больше не создается автоматически: его нужно создать отдельной кнопкой в деталке видео, и он собирается из данных SQLite.
 
 ## Структура проекта

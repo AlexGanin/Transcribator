@@ -78,13 +78,32 @@ export async function transcribeFile(file: Express.Multer.File | undefined, opti
   }
 
   await assertCommandAvailable(getFfmpegCommand());
-  const safeOriginalName = safeFileName(file.originalname || file.filename);
-  const savedSourcePath = path.join(SOURCE_DIR, safeOriginalName);
+  const { safeOriginalName, savedSourcePath } = getSavedSourcePathForUpload(file);
   await rm(savedSourcePath, { force: true });
   await streamPipeline(createReadStream(file.path), createWriteStream(savedSourcePath));
   await rm(file.path, { force: true });
 
   return transcribeFromFileStream(savedSourcePath, safeOriginalName, options);
+}
+
+export async function transcribeSavedFile(sourcePath: string, originalName: string, options: TranscriptionOptions = {}) {
+  if (!sourcePath) {
+    throw createHttpError(400, 'Saved source file path is required.');
+  }
+
+  await assertCommandAvailable(getFfmpegCommand());
+  return transcribeFromFileStream(sourcePath, originalName || path.basename(sourcePath), options);
+}
+
+export function getSavedSourcePathForUpload(file: Express.Multer.File): {
+  safeOriginalName: string;
+  savedSourcePath: string;
+} {
+  const safeOriginalName = safeFileName(file.originalname || file.filename);
+  return {
+    safeOriginalName,
+    savedSourcePath: path.join(SOURCE_DIR, safeOriginalName)
+  };
 }
 
 async function transcribeFromUrlStream(inputUrl: string, options: TranscriptionOptions) {
