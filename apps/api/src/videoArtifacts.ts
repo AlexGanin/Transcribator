@@ -7,6 +7,7 @@ import {
   type VideoScreenshotScope,
   type VideoScreenshotsRequest,
   type YouTubeVideo,
+  type YouTubeVideoDeleteResponse,
   type YouTubeVideoScreenshotsOperationResponse,
   type YouTubeVideoTranscriptResponse
 } from '@transcribator/shared';
@@ -28,6 +29,7 @@ export interface UploadedThumbnailFile {
 export interface VideoArtifactsService {
   updateTranscript(id: string, patch: UpdateYouTubeVideoTranscriptRequest): Promise<YouTubeVideoTranscriptResponse>;
   updateThumbnail(id: string, file: UploadedThumbnailFile | undefined): Promise<YouTubeVideoTranscriptResponse>;
+  deleteVideo(id: string): Promise<YouTubeVideoDeleteResponse>;
   formatWithAi(id: string): Promise<YouTubeVideoTranscriptResponse>;
   createMarkdown(id: string): Promise<YouTubeVideoTranscriptResponse>;
   trashScreenshots(id: string, payload: VideoScreenshotsRequest): Promise<YouTubeVideoScreenshotsOperationResponse>;
@@ -71,6 +73,25 @@ export function createVideoArtifactsService(options: VideoArtifactsServiceOption
       await rename(file.path, nextPath);
 
       return { video: store.setThumbnailUrl(video.id, thumbnailUrl(video.id, fileName)) };
+    },
+
+    async deleteVideo(id) {
+      const video = requireVideo(store, id);
+      if (video.status === 'processing') {
+        throw createHttpError(409, 'Дождитесь окончания транскрибации перед удалением видео.');
+      }
+
+      await rm(assertInside(
+        path.resolve(runtimeDir),
+        path.resolve(path.join(runtimeDir, 'artifacts', video.id))
+      ), { force: true, recursive: true });
+
+      const sourcePath = safeRuntimeSourcePath(runtimeDir, video.sourcePath);
+      if (sourcePath) {
+        await rm(sourcePath, { force: true });
+      }
+
+      return { deletedId: store.deleteVideo(video.id).id };
     },
 
     async formatWithAi(id) {
@@ -367,6 +388,14 @@ function normalizeThumbnailFileName(fileName: string): string {
     throw createHttpError(400, 'Invalid thumbnail file name.');
   }
   return normalized;
+}
+
+function safeRuntimeSourcePath(runtimeDir: string, sourcePath: string): string | null {
+  if (!sourcePath) return null;
+  const sourceRoot = path.resolve(runtimeDir, 'source');
+  const resolved = path.resolve(sourcePath);
+  const relative = path.relative(sourceRoot, resolved);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? null : resolved;
 }
 
 function sortScreenshots(screenshots: VideoScreenshot[]): VideoScreenshot[] {

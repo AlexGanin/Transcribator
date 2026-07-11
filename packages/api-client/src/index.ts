@@ -7,6 +7,7 @@ import {
   youtubeVideoAddResponseSchema,
   youtubeVideoCheckResponseSchema,
   youtubeVideoCreateRequestSchema,
+  youtubeVideoDeleteResponseSchema,
   youtubeVideoDetailResponseSchema,
   youtubeVideoListResponseSchema,
   youtubeVideoScreenshotsOperationResponseSchema,
@@ -30,6 +31,7 @@ import {
   type YouTubeVideoAddResponse,
   type YouTubeVideoCheckResponse,
   type YouTubeVideoCreateRequest,
+  type YouTubeVideoDeleteResponse,
   type YouTubeVideoDetailResponse,
   type YouTubeVideoListResponse,
   type YouTubeVideoScreenshotsOperationResponse,
@@ -212,6 +214,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
         youtubeVideoTranscriptResponseSchema
       );
     },
+
+    deleteYouTubeVideo: (id: string) =>
+      requestJson<YouTubeVideoDeleteResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+        youtubeVideoDeleteResponseSchema
+      ),
 
     formatYouTubeVideoTranscript: (id: string) =>
       requestJson<YouTubeVideoTranscriptResponse>(

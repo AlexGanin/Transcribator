@@ -521,6 +521,17 @@ export class VideoLibraryStore {
     return this.requireVideo(id);
   }
 
+  deleteVideo(id: string): YouTubeVideo {
+    const video = this.requireVideo(id);
+
+    this.db.prepare(`
+      DELETE FROM youtube_videos
+      WHERE id = ?
+    `).run(id);
+
+    return video;
+  }
+
   setScreenshots(id: string, screenshots: VideoScreenshot[], trashedScreenshots: VideoScreenshot[]): YouTubeVideo {
     this.requireVideo(id);
     const now = this.now();

@@ -4,6 +4,10 @@
 
 ## 2026-07-11
 
+- Добавлено: в CRM `/videos` у каждой карточки появился красный крестик удаления с подтверждением; API получил `DELETE /videos/library/:id`, который удаляет строку видеотеки, `runtime/artifacts/<video-id>/` и безопасно удаляет source copy локального файла внутри `runtime/source/`.
+- Проверено: `pnpm --filter @transcribator/api test`; `pnpm --filter @transcribator/api typecheck`; `pnpm --filter @transcribator/api build`; `pnpm --filter @transcribator/shared check`; `pnpm --filter @transcribator/api-client check`; `pnpm --filter @transcribator/crm check`; `pnpm --filter @transcribator/api exec node --test --import tsx ../../packages/api-client/src/index.test.ts`; `git diff --check`.
+- Документация: обновлены `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 - Добавлено: в CRM-деталке `/videos/[id]` во вкладке «Данные видео» можно вручную назначать превью JPEG/PNG/WebP для YouTube и локальных file-записей; API сохраняет актуальный файл в `runtime/artifacts/<video-id>/thumbnail/`, обновляет `thumbnail_url` и не затирает ручное превью при обновлении YouTube metadata.
 - Проверено: `pnpm --filter @transcribator/api test`; `pnpm --filter @transcribator/api typecheck`; `pnpm --filter @transcribator/api build`; `pnpm --filter @transcribator/shared check`; `pnpm --filter @transcribator/api-client check`; `pnpm --filter @transcribator/crm check`; `pnpm --filter @transcribator/api exec node --test --import tsx ../../packages/api-client/src/index.test.ts`; `git diff --check`.
 - Документация: обновлены `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.

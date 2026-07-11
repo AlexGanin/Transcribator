@@ -236,4 +236,20 @@ describe('api client defaults', () => {
     assert.ok(requests[0]?.init.body instanceof FormData);
     assert.equal((requests[0]?.init.body as FormData).get('file'), file);
   });
+
+  it('deletes a video from the CRM library', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: FetchLike = async (input, init = {}) => {
+      requests.push({ url: String(input), init });
+      return new Response(JSON.stringify({ deletedId: 'video-id' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    const result = await createApiClient({ fetchImpl }).deleteYouTubeVideo('video-id');
+
+    assert.deepEqual(result, { deletedId: 'video-id' });
+    assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id');
+    assert.equal(requests[0]?.init.method, 'DELETE');
+  });
 });

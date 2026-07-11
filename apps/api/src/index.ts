@@ -134,6 +134,14 @@ app.get('/videos/library/:id', async (req: Request, res: Response, next: NextFun
   }
 });
 
+app.delete('/videos/library/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await videoArtifactsService.deleteVideo(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/videos/library/:id/metadata', async (req: Request, res: Response, next: NextFunction) => {
   try {
     res.json(await defaultVideoLibraryStore.getVideoDetail(String(req.params.id || ''), { refresh: true }));

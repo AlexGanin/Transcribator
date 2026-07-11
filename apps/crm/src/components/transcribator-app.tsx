@@ -198,6 +198,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
   const [youtubeVideos, setYoutubeVideos] = React.useState<YouTubeVideo[]>([]);
   const [youtubeVideosLoading, setYoutubeVideosLoading] = React.useState(false);
   const [youtubeVideosError, setYoutubeVideosError] = React.useState('');
+  const [youtubeVideoDeletingId, setYoutubeVideoDeletingId] = React.useState('');
   const [selectedYoutubeChannelId, setSelectedYoutubeChannelId] = React.useState(ALL_YOUTUBE_CHANNELS_ID);
   const [youtubeVideoDetail, setYoutubeVideoDetail] = React.useState<YouTubeVideo | null>(null);
   const [youtubeVideoDetailLoading, setYoutubeVideoDetailLoading] = React.useState(false);
@@ -521,6 +522,33 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
       if (options.showLoading) {
         setYoutubeVideosLoading(false);
       }
+    }
+  }
+
+  async function deleteYouTubeVideo(video: YouTubeVideo) {
+    const confirmed = window.confirm('Вы действительно желаете удалить эту запись?');
+    if (!confirmed) return;
+
+    setYoutubeVideoDeletingId(video.id);
+    setYoutubeVideosError('');
+
+    try {
+      await api.deleteYouTubeVideo(video.id);
+      const nextVideos = youtubeVideos.filter((item) => item.id !== video.id);
+      setYoutubeVideos(nextVideos);
+      if (
+        selectedYoutubeChannelId !== ALL_YOUTUBE_CHANNELS_ID
+        && filterYouTubeVideosByChannel(nextVideos, selectedYoutubeChannelId).length === 0
+      ) {
+        setSelectedYoutubeChannelId(ALL_YOUTUBE_CHANNELS_ID);
+      }
+      if (youtubeVideoDetail?.id === video.id) {
+        setYoutubeVideoDetail(null);
+      }
+    } catch (caught) {
+      setYoutubeVideosError(errorMessage(caught, 'Не удалось удалить видео.'));
+    } finally {
+      setYoutubeVideoDeletingId('');
     }
   }
 
@@ -1240,9 +1268,21 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                   )}
 
                   {filteredYoutubeVideos.map((video) => (
-                    <article key={video.id} className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-[160px_1fr]">
+                    <article key={video.id} className="relative grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-[160px_1fr]">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-4 top-4 h-8 w-8 bg-white/90 text-red-700 shadow-sm hover:bg-red-50 hover:text-red-800"
+                        onClick={() => void deleteYouTubeVideo(video)}
+                        disabled={Boolean(youtubeVideoDeletingId) || video.status === 'processing'}
+                        title={youtubeVideoDeletingId === video.id ? 'Удаляю...' : video.status === 'processing' ? 'Дождитесь окончания транскрибации' : 'Удалить запись'}
+                        aria-label={`Удалить ${videoDisplayTitle(video)}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                       <VideoThumbnailPreview video={video} />
-                      <div className="grid gap-2">
+                      <div className="grid gap-2 pr-10">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <h3 className="text-base font-semibold break-words">
                             <Link
@@ -1253,7 +1293,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                               {videoDisplayTitle(video)}
                             </Link>
                           </h3>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap items-start gap-2">
                             <VideoSourceBadge video={video} />
                             <Badge variant="secondary">{formatYouTubeVideoStatus(video.status)}</Badge>
                           </div>

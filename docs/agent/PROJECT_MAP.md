@@ -115,6 +115,7 @@ apps/api
   - Нормализует YouTube URL до canonical watch URL, дедуплицирует YouTube по `youtubeVideoId`, создает локальные file-записи с синтетическим `youtubeVideoId = file:<id>`, отдает список для CRM `/videos` и детальную карточку `/videos/[id]`.
   - При добавлении YouTube-видео сразу пытается сохранить полную metadata через `yt-dlp --dump-json`; при чтении списка дополнительно дозаполняет старые YouTube-записи без `metadataFetchedAt`.
   - Для YouTube-детальной карточки кэширует metadata из `yt-dlp --dump-json`: описание, длительность, даты, статистику, канал, теги, категории, доступность и форматы; локальные file-записи metadata через `yt-dlp` не обновляют.
+  - Удаляет сохраненные записи видеотеки из `youtube_videos` по запросу CRM `/videos`.
   - При старте удаляет legacy-таблицы `transcriptions` и `screenshots`; старые данные истории не мигрируются.
 
 - `src/videoTranscription.ts`
@@ -127,6 +128,7 @@ apps/api
   - Редактирует transcript-поля видео, создает Markdown в `runtime/artifacts/<video-id>/transcript.md`.
   - Управляет JSON-индексом скриншотов видео и перемещает файлы между `screenshots/` и `trash/screenshots/`.
   - Сохраняет вручную загруженные превью видео в `runtime/artifacts/<video-id>/thumbnail/` и обновляет `thumbnailUrl` текущей записи.
+  - Удаляет runtime artifacts видео и API-owned `runtime/source/` copy локального файла при удалении записи видеотеки.
 
 - `src/videoCompression.ts`
   - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
@@ -168,6 +170,7 @@ apps/crm
   - transcription engine selection
   - SSE progress
   - YouTube video backlog на странице `/videos` с сайдбаром каналов, статусом транскрипта и кнопкой «Транскрибировать»
+  - удаление записей видеотеки из списка `/videos` через красный крестик с подтверждением
   - локальные file-записи в `/videos` после транскрибации upload-файлов; по умолчанию они группируются в источнике `Транскрибации`
   - детальная карточка `/videos/[id]` с YouTube metadata или local file metadata, ручной загрузкой превью, запуском транскрибации, редактированием полей карточки и transcript-полей, Markdown action, галереей скриншотов и корзиной
   - копирование текста `Clean Transcript` из текущего результата и деталки видео

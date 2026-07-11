@@ -265,6 +265,10 @@ export const youtubeVideoTranscriptResponseSchema = z.object({
   video: youtubeVideoSchema
 });
 
+export const youtubeVideoDeleteResponseSchema = z.object({
+  deletedId: z.string().min(1)
+});
+
 export const youtubeVideoScreenshotsOperationResponseSchema = youtubeVideoTranscriptResponseSchema.extend({
   moved: z.array(screenshotFileNameSchema).default([]),
   missing: z.array(screenshotFileNameSchema).default([]),
@@ -318,6 +322,7 @@ export type YouTubeVideoCheckResponse = z.infer<typeof youtubeVideoCheckResponse
 export type YouTubeVideoDetailResponse = z.infer<typeof youtubeVideoDetailResponseSchema>;
 export type YouTubeVideoTranscriptionStartResponse = z.infer<typeof youtubeVideoTranscriptionStartResponseSchema>;
 export type YouTubeVideoTranscriptResponse = z.infer<typeof youtubeVideoTranscriptResponseSchema>;
+export type YouTubeVideoDeleteResponse = z.infer<typeof youtubeVideoDeleteResponseSchema>;
 export type YouTubeVideoScreenshotsOperationResponse = z.infer<typeof youtubeVideoScreenshotsOperationResponseSchema>;
 export type VideoCompressionPreset = z.infer<typeof videoCompressionPresetSchema>;
 export type VideoCompressionRequest = z.infer<typeof videoCompressionRequestSchema>;
