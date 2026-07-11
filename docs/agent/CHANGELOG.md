@@ -4,6 +4,10 @@
 
 ## 2026-07-11
 
+- Изменено: в CRM-текстах транскрипции подписи `Summary`, `Formatted transcript` и `Clean transcript` переведены на русский, а поле `Raw transcript` скрыто из редактора вкладки «Транскрипция» деталки видео без изменения хранения `rawText`.
+- Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
+- Документация: обновлен `docs/agent/CHANGELOG.md`.
+
 - Добавлено: в CRM `/videos` у каждой карточки появился красный крестик удаления с подтверждением; API получил `DELETE /videos/library/:id`, который удаляет строку видеотеки, `runtime/artifacts/<video-id>/` и безопасно удаляет source copy локального файла внутри `runtime/source/`.
 - Проверено: `pnpm --filter @transcribator/api test`; `pnpm --filter @transcribator/api typecheck`; `pnpm --filter @transcribator/api build`; `pnpm --filter @transcribator/shared check`; `pnpm --filter @transcribator/api-client check`; `pnpm --filter @transcribator/crm check`; `pnpm --filter @transcribator/api exec node --test --import tsx ../../packages/api-client/src/index.test.ts`; `git diff --check`.
 - Документация: обновлены `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.

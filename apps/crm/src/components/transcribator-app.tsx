@@ -899,7 +899,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
         cleanTranscriptCopyTimerRef.current = null;
       }, 1600);
     } catch {
-      window.alert('Не удалось скопировать текст. Выдели Clean Transcript вручную.');
+      window.alert('Не удалось скопировать текст. Выдели очищенный транскрипт вручную.');
     }
   }
 
@@ -1636,18 +1636,18 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
 
               <section className="grid gap-4">
                 <label className="grid gap-2 text-sm font-medium">
-                  Summary
-                  <Textarea className="min-h-36" value={summary} readOnly placeholder="Summary появится после нейроформатирования." />
+                  Краткое содержание
+                  <Textarea className="min-h-36" value={summary} readOnly placeholder="Краткое содержание появится после нейроформатирования." />
                 </label>
 
                 <label className="grid gap-2 text-sm font-medium">
-                  Formatted transcript
+                  Форматированный транскрипт
                   <Textarea className="min-h-72" value={formattedText} readOnly placeholder="Нейроформатирование появится здесь." />
                 </label>
 
                 <div className="grid gap-2 text-sm font-medium">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>Clean transcript</span>
+                    <span>Очищенный транскрипт</span>
                     <Button
                       type="button"
                       variant="secondary"
@@ -1659,12 +1659,12 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                       {cleanTranscriptCopyStatus === 'copied' ? 'Скопировано' : 'Скопировать'}
                     </Button>
                   </div>
-                  <Textarea className="min-h-72" value={cleanText} readOnly placeholder="Cleaned transcript will appear here." />
+                  <Textarea className="min-h-72" value={cleanText} readOnly placeholder="Очищенный транскрипт появится здесь." />
                 </div>
 
                 <label className="grid gap-2 text-sm font-medium">
-                  Raw transcript
-                  <Textarea className="min-h-72" value={rawText} readOnly placeholder="Raw transcription result will appear here." />
+                  Сырой транскрипт
+                  <Textarea className="min-h-72" value={rawText} readOnly placeholder="Исходный результат транскрибации появится здесь." />
                 </label>
               </section>
 
@@ -1918,11 +1918,11 @@ function VideoTranscriptView({
         </CardHeader>
         <CardContent className="grid gap-4">
           <label className="grid gap-2 text-sm font-medium">
-            Summary
+            Краткое содержание
             <Textarea className="min-h-36" value={form.summary} onChange={(event) => onFormChange('summary', event.target.value)} />
           </label>
           <label className="grid gap-2 text-sm font-medium">
-            Formatted transcript
+            Форматированный транскрипт
             <Textarea
               className="min-h-80"
               value={form.formattedText}
@@ -1931,7 +1931,7 @@ function VideoTranscriptView({
           </label>
           <div className="grid gap-2 text-sm font-medium">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>Clean transcript</span>
+              <span>Очищенный транскрипт</span>
               <Button
                 type="button"
                 variant="secondary"
@@ -1945,10 +1945,6 @@ function VideoTranscriptView({
             </div>
             <Textarea className="min-h-80" value={form.cleanText} onChange={(event) => onFormChange('cleanText', event.target.value)} />
           </div>
-          <label className="grid gap-2 text-sm font-medium">
-            Raw transcript
-            <Textarea className="min-h-80" value={form.rawText} onChange={(event) => onFormChange('rawText', event.target.value)} />
-          </label>
         </CardContent>
       </Card>
     </section>
