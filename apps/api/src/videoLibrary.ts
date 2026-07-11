@@ -109,12 +109,13 @@ export class VideoLibraryStore {
     const now = this.now();
 
     if (existing) {
+      const inputThumbnailUrl = normalizeText(input.thumbnailUrl);
       const next = {
         ...existing,
         url: normalizeYouTubeWatchUrl(youtubeVideoId),
         title: normalizeText(input.title) || existing.title,
         channelTitle: normalizeText(input.channelTitle) || existing.channelTitle,
-        thumbnailUrl: normalizeText(input.thumbnailUrl) || existing.thumbnailUrl,
+        thumbnailUrl: isManualThumbnailUrl(existing.thumbnailUrl) ? existing.thumbnailUrl : inputThumbnailUrl || existing.thumbnailUrl,
         updatedAt: now
       };
       this.db.prepare(`
@@ -503,6 +504,23 @@ export class VideoLibraryStore {
     return this.requireVideo(id);
   }
 
+  setThumbnailUrl(id: string, thumbnailUrl: string): YouTubeVideo {
+    this.requireVideo(id);
+    const now = this.now();
+
+    this.db.prepare(`
+      UPDATE youtube_videos
+      SET thumbnail_url = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      normalizeText(thumbnailUrl),
+      now,
+      id
+    );
+
+    return this.requireVideo(id);
+  }
+
   setScreenshots(id: string, screenshots: VideoScreenshot[], trashedScreenshots: VideoScreenshot[]): YouTubeVideo {
     this.requireVideo(id);
     const now = this.now();
@@ -542,6 +560,9 @@ export class VideoLibraryStore {
   private saveMetadata(id: string, metadata: YouTubeVideoMetadata): void {
     const metadataFetchedAt = this.now();
     const current = this.getVideoById(id);
+    const thumbnailUrl = isManualThumbnailUrl(current?.thumbnailUrl)
+      ? current?.thumbnailUrl || ''
+      : metadata.thumbnailUrl || current?.thumbnailUrl || '';
     this.db.prepare(`
       UPDATE youtube_videos
       SET
@@ -582,7 +603,7 @@ export class VideoLibraryStore {
       metadata.uploader,
       metadata.uploaderId,
       metadata.uploaderUrl,
-      metadata.thumbnailUrl || current?.thumbnailUrl || '',
+      thumbnailUrl,
       metadata.durationSeconds,
       metadata.durationLabel,
       metadata.uploadDate,
@@ -772,6 +793,10 @@ function normalizeYouTubeWatchUrl(youtubeVideoId: string): string {
 
 function normalizeText(value: string | undefined): string {
   return String(value || '').trim();
+}
+
+function isManualThumbnailUrl(value: string | undefined): boolean {
+  return /^\/videos\/library\/[^/]+\/thumbnail\/thumbnail-[0-9]+\.(?:jpg|png|webp)$/i.test(value || '');
 }
 
 interface YouTubeVideoRow {

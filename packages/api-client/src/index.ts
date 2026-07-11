@@ -200,6 +200,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
         youtubeVideoTranscriptResponseSchema
       ),
 
+    uploadYouTubeVideoThumbnail: (id: string, file: File) => {
+      const body = new FormData();
+      body.append('file', file);
+
+      return requestJson<YouTubeVideoTranscriptResponse>(
+        fetcher,
+        baseUrl,
+        `/videos/library/${encodeURIComponent(id)}/thumbnail`,
+        { method: 'POST', body },
+        youtubeVideoTranscriptResponseSchema
+      );
+    },
+
     formatYouTubeVideoTranscript: (id: string) =>
       requestJson<YouTubeVideoTranscriptResponse>(
         fetcher,

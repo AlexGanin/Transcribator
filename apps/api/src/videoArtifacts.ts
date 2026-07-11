@@ -19,13 +19,21 @@ export interface VideoArtifactsServiceOptions {
   runtimeDir?: string | undefined;
 }
 
+export interface UploadedThumbnailFile {
+  path: string;
+  originalname?: string | undefined;
+  mimetype?: string | undefined;
+}
+
 export interface VideoArtifactsService {
   updateTranscript(id: string, patch: UpdateYouTubeVideoTranscriptRequest): Promise<YouTubeVideoTranscriptResponse>;
+  updateThumbnail(id: string, file: UploadedThumbnailFile | undefined): Promise<YouTubeVideoTranscriptResponse>;
   formatWithAi(id: string): Promise<YouTubeVideoTranscriptResponse>;
   createMarkdown(id: string): Promise<YouTubeVideoTranscriptResponse>;
   trashScreenshots(id: string, payload: VideoScreenshotsRequest): Promise<YouTubeVideoScreenshotsOperationResponse>;
   restoreScreenshots(id: string, payload: VideoScreenshotsRequest): Promise<YouTubeVideoScreenshotsOperationResponse>;
   clearScreenshotsTrash(id: string): Promise<YouTubeVideoScreenshotsOperationResponse>;
+  getThumbnailPath(id: string, fileName: string): Promise<string>;
   getScreenshotPath(id: string, scope: VideoScreenshotScope, fileName: string): Promise<string>;
 }
 
@@ -41,6 +49,28 @@ export function createVideoArtifactsService(options: VideoArtifactsServiceOption
   return {
     async updateTranscript(id, patch) {
       return { video: store.updateTranscript(id, patch) };
+    },
+
+    async updateThumbnail(id, file) {
+      const video = requireVideo(store, id);
+      if (!file) {
+        throw createHttpError(400, 'Выберите изображение для превью.');
+      }
+
+      const extension = thumbnailExtension(file);
+      if (!extension) {
+        throw createHttpError(400, 'Загрузите изображение JPEG, PNG или WebP.');
+      }
+
+      const thumbnailDir = path.join(runtimeDir, 'artifacts', video.id, 'thumbnail');
+      const fileName = `thumbnail-${Date.now()}.${extension}`;
+      const nextPath = assertInside(path.resolve(runtimeDir), path.resolve(path.join(thumbnailDir, fileName)));
+
+      await rm(thumbnailDir, { force: true, recursive: true });
+      await mkdir(thumbnailDir, { recursive: true });
+      await rename(file.path, nextPath);
+
+      return { video: store.setThumbnailUrl(video.id, thumbnailUrl(video.id, fileName)) };
     },
 
     async formatWithAi(id) {
@@ -102,6 +132,25 @@ export function createVideoArtifactsService(options: VideoArtifactsServiceOption
         missing: [],
         deleted
       };
+    },
+
+    async getThumbnailPath(id, fileName) {
+      const video = requireVideo(store, id);
+      const safeName = normalizeThumbnailFileName(fileName);
+      if (video.thumbnailUrl !== thumbnailUrl(video.id, safeName)) {
+        throw createHttpError(404, 'Thumbnail not found.');
+      }
+
+      const safePath = assertInside(
+        path.resolve(runtimeDir),
+        path.resolve(path.join(runtimeDir, 'artifacts', video.id, 'thumbnail', safeName))
+      );
+
+      if (!await fileExists(safePath)) {
+        throw createHttpError(404, 'Thumbnail file is missing.');
+      }
+
+      return safePath;
     },
 
     async getScreenshotPath(id, scope, fileName) {
@@ -295,6 +344,31 @@ function screenshotPath(runtimeDir: string, videoId: string, scope: VideoScreens
   );
 }
 
+function thumbnailUrl(videoId: string, fileName: string): string {
+  return `/videos/library/${encodeURIComponent(videoId)}/thumbnail/${encodeURIComponent(fileName)}`;
+}
+
+function thumbnailExtension(file: UploadedThumbnailFile): 'jpg' | 'png' | 'webp' | null {
+  const mimeType = String(file.mimetype || '').toLowerCase();
+  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'jpg';
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+
+  const extension = path.extname(file.originalname || '').toLowerCase();
+  if (extension === '.jpg' || extension === '.jpeg') return 'jpg';
+  if (extension === '.png') return 'png';
+  if (extension === '.webp') return 'webp';
+  return null;
+}
+
+function normalizeThumbnailFileName(fileName: string): string {
+  const normalized = String(fileName || '').trim();
+  if (!/^thumbnail-[0-9]+\.(?:jpg|png|webp)$/i.test(normalized)) {
+    throw createHttpError(400, 'Invalid thumbnail file name.');
+  }
+  return normalized;
+}
+
 function sortScreenshots(screenshots: VideoScreenshot[]): VideoScreenshot[] {
   return [...screenshots].sort((left, right) => left.timestampSeconds - right.timestampSeconds || left.fileName.localeCompare(right.fileName));
 }
@@ -310,7 +384,7 @@ function requireVideo(store: VideoLibraryStore, id: string): YouTubeVideo {
 function assertInside(rootDir: string, filePath: string): string {
   const relative = path.relative(rootDir, filePath);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw createHttpError(400, 'Invalid screenshot file path.');
+    throw createHttpError(400, 'Invalid artifact file path.');
   }
   return filePath;
 }

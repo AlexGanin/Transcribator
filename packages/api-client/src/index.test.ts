@@ -208,4 +208,32 @@ describe('api client defaults', () => {
     assert.equal(requests[0]?.init.method, 'PATCH');
     assert.deepEqual(JSON.parse(String(requests[0]?.init.body)), { cleanText: 'clean' });
   });
+
+  it('uploads a video thumbnail as multipart form data', async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: FetchLike = async (input, init = {}) => {
+      requests.push({ url: String(input), init });
+      return new Response(JSON.stringify({
+        video: {
+          id: 'video-id',
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          title: 'Видео',
+          status: 'done',
+          thumbnailUrl: '/videos/library/video-id/thumbnail/thumbnail-123.png',
+          createdAt: 1,
+          updatedAt: 2
+        }
+      }), { headers: { 'Content-Type': 'application/json' } });
+    };
+    const file = new File(['image-bytes'], 'cover.png', { type: 'image/png' });
+
+    const result = await createApiClient({ fetchImpl }).uploadYouTubeVideoThumbnail('video-id', file);
+
+    assert.equal(result.video.thumbnailUrl, '/videos/library/video-id/thumbnail/thumbnail-123.png');
+    assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id/thumbnail');
+    assert.equal(requests[0]?.init.method, 'POST');
+    assert.ok(requests[0]?.init.body instanceof FormData);
+    assert.equal((requests[0]?.init.body as FormData).get('file'), file);
+  });
 });

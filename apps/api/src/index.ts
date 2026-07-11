@@ -176,6 +176,30 @@ app.post('/videos/library/:id/markdown', async (req: Request<{ id: string }>, re
   }
 });
 
+app.post('/videos/library/:id/thumbnail', upload.single('file'), async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    res.json(await videoArtifactsService.updateThumbnail(req.params.id, req.file));
+  } catch (error) {
+    if (req.file?.path) {
+      await rm(req.file.path, { force: true });
+    }
+    next(error);
+  }
+});
+
+app.get(
+  '/videos/library/:id/thumbnail/:fileName',
+  async (req: Request<{ id: string; fileName: string }>, res: Response, next: NextFunction) => {
+    try {
+      const extension = path.extname(req.params.fileName).toLowerCase();
+      res.type(extension === '.png' ? 'image/png' : extension === '.webp' ? 'image/webp' : 'image/jpeg');
+      res.sendFile(await videoArtifactsService.getThumbnailPath(req.params.id, req.params.fileName));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 app.post('/videos/library/:id/screenshots/trash', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
   try {
     const body = videoScreenshotsRequestSchema.parse(req.body || {});

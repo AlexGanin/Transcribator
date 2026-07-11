@@ -126,6 +126,7 @@ apps/api
 - `src/videoArtifacts.ts`
   - Редактирует transcript-поля видео, создает Markdown в `runtime/artifacts/<video-id>/transcript.md`.
   - Управляет JSON-индексом скриншотов видео и перемещает файлы между `screenshots/` и `trash/screenshots/`.
+  - Сохраняет вручную загруженные превью видео в `runtime/artifacts/<video-id>/thumbnail/` и обновляет `thumbnailUrl` текущей записи.
 
 - `src/videoCompression.ts`
   - Сжимает один локальный видеофайл через `ffprobe` и `ffmpeg`.
@@ -168,7 +169,7 @@ apps/crm
   - SSE progress
   - YouTube video backlog на странице `/videos` с сайдбаром каналов, статусом транскрипта и кнопкой «Транскрибировать»
   - локальные file-записи в `/videos` после транскрибации upload-файлов; по умолчанию они группируются в источнике `Транскрибации`
-  - детальная карточка `/videos/[id]` с YouTube metadata или local file metadata, запуском транскрибации, редактированием полей карточки и transcript-полей, Markdown action, галереей скриншотов и корзиной
+  - детальная карточка `/videos/[id]` с YouTube metadata или local file metadata, ручной загрузкой превью, запуском транскрибации, редактированием полей карточки и transcript-полей, Markdown action, галереей скриншотов и корзиной
   - копирование текста `Clean Transcript` из текущего результата и деталки видео
   - video format selection
   - video downloads
@@ -229,7 +230,7 @@ apps/extension
 - `runtime/source/`: safe-name copies загруженных source files.
 - `runtime/tmp/`: multer uploads, generated WAV files и Whisper output folders.
 - `runtime/output/`: legacy-каталог; новые транскрипты здесь не сохраняются.
-- `runtime/artifacts/`: Markdown, screenshots и trash screenshots для видео по `runtime/artifacts/<video-id>/`.
+- `runtime/artifacts/`: Markdown, thumbnails, screenshots и trash screenshots для видео по `runtime/artifacts/<video-id>/`.
 - `runtime/downloads/`: скачанные YouTube videos.
 - `runtime/compressed/`: сжатые локальные video files.
 - `runtime/obsidian/`: legacy Obsidian-ready transcript vault folders со скриншотами и metadata.

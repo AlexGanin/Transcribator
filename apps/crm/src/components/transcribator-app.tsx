@@ -124,7 +124,7 @@ type SourceMode = 'url' | 'file';
 type RunStatus = 'idle' | 'running' | 'done' | 'error';
 type StageStatus = 'pending' | 'running' | 'done';
 type ScreenshotScope = 'active' | 'trash';
-type VideoAction = '' | 'transcribe' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown' | 'save';
+type VideoAction = '' | 'transcribe' | 'trash' | 'restore' | 'clear' | 'format' | 'markdown' | 'save' | 'thumbnail';
 type CopyStatus = 'idle' | 'copied';
 
 interface StageState {
@@ -204,6 +204,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
   const [youtubeVideoDetailRefreshing, setYoutubeVideoDetailRefreshing] = React.useState(false);
   const [youtubeVideoDetailError, setYoutubeVideoDetailError] = React.useState('');
   const [youtubeVideoMetadataError, setYoutubeVideoMetadataError] = React.useState('');
+  const [youtubeVideoThumbnailError, setYoutubeVideoThumbnailError] = React.useState('');
   const [youtubeVideoAction, setYoutubeVideoAction] = React.useState<VideoAction>('');
   const [youtubeVideoTranscriptForm, setYoutubeVideoTranscriptForm] = React.useState<VideoTranscriptForm>(createVideoTranscriptForm());
   const [youtubeVideoTranscriptionStages, setYoutubeVideoTranscriptionStages] = React.useState<StageState[]>([]);
@@ -530,6 +531,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
     if (options.showError) {
       setYoutubeVideoDetailError('');
       setYoutubeVideoMetadataError('');
+      setYoutubeVideoThumbnailError('');
     }
 
     try {
@@ -541,6 +543,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
       setLightbox(null);
       setLastLightboxTrash(null);
       setYoutubeVideoMetadataError(response.metadataError || '');
+      setYoutubeVideoThumbnailError('');
     } catch (caught) {
       setYoutubeVideoDetail(null);
       if (options.showError) {
@@ -557,6 +560,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
     setYoutubeVideoDetailRefreshing(true);
     setYoutubeVideoDetailError('');
     setYoutubeVideoMetadataError('');
+    setYoutubeVideoThumbnailError('');
 
     try {
       const response = await api.refreshYouTubeVideoMetadata(id);
@@ -576,6 +580,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
     setSelectedActiveScreenshots([]);
     setSelectedTrashedScreenshots([]);
     setLightbox(null);
+    setYoutubeVideoThumbnailError('');
   }
 
   async function saveYouTubeVideoTranscript() {
@@ -590,6 +595,24 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
       await refreshVideoListAfterDetailChange(response.video);
     } catch (caught) {
       setYoutubeVideoDetailError(errorMessage(caught, 'Не удалось сохранить транскрипт.'));
+    } finally {
+      setYoutubeVideoAction('');
+    }
+  }
+
+  async function uploadYouTubeVideoThumbnail(file: File) {
+    if (!youtubeVideoDetail) return;
+
+    setYoutubeVideoAction('thumbnail');
+    setYoutubeVideoDetailError('');
+    setYoutubeVideoThumbnailError('');
+
+    try {
+      const response = await api.uploadYouTubeVideoThumbnail(youtubeVideoDetail.id, file);
+      applyYouTubeVideo(response.video);
+      await refreshVideoListAfterDetailChange(response.video);
+    } catch (caught) {
+      setYoutubeVideoThumbnailError(errorMessage(caught, 'Не удалось загрузить превью.'));
     } finally {
       setYoutubeVideoAction('');
     }
@@ -1218,17 +1241,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
 
                   {filteredYoutubeVideos.map((video) => (
                     <article key={video.id} className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-[160px_1fr]">
-                      {video.thumbnailUrl ? (
-                        <img
-                          src={video.thumbnailUrl}
-                          alt=""
-                          className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
-                        />
-                      ) : (
-                        <div className="flex aspect-video w-full items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 text-neutral-500">
-                          <FileVideo className="h-8 w-8" />
-                        </div>
-                      )}
+                      <VideoThumbnailPreview video={video} />
                       <div className="grid gap-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <h3 className="text-base font-semibold break-words">
@@ -1302,17 +1315,7 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
             {!youtubeVideoDetailLoading && youtubeVideoDetail && (
               <section className="grid gap-5">
                 <article className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-[280px_1fr]">
-                  {youtubeVideoDetail.thumbnailUrl ? (
-                    <img
-                      src={youtubeVideoDetail.thumbnailUrl}
-                      alt=""
-                      className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
-                    />
-                  ) : (
-                    <div className="flex aspect-video w-full items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 text-neutral-500">
-                      <FileVideo className="h-10 w-10" />
-                    </div>
-                  )}
+                  <VideoThumbnailPreview video={youtubeVideoDetail} iconClassName="h-10 w-10" />
                   <div className="grid content-start gap-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <h2 className="text-xl font-semibold break-words">{videoDisplayTitle(youtubeVideoDetail)}</h2>
@@ -1454,10 +1457,12 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                       form={youtubeVideoTranscriptForm}
                       onFormChange={updateVideoTranscriptForm}
                       metadataError={youtubeVideoMetadataError}
+                      thumbnailError={youtubeVideoThumbnailError}
                       metadataRefreshing={youtubeVideoDetailRefreshing}
                       action={youtubeVideoAction}
                       onSave={() => void saveYouTubeVideoTranscript()}
                       onRefreshMetadata={() => void refreshYouTubeVideoMetadata(youtubeVideoDetail.id)}
+                      onThumbnailUpload={(file) => void uploadYouTubeVideoThumbnail(file)}
                     />
                   </TabsContent>
 
@@ -2000,26 +2005,63 @@ function VideoScreenshotsView({
   );
 }
 
+function VideoThumbnailPreview({
+  video,
+  iconClassName = 'h-8 w-8'
+}: {
+  video: Pick<YouTubeVideo, 'thumbnailUrl'>;
+  iconClassName?: string;
+}) {
+  const thumbnailUrl = videoThumbnailUrl(video);
+
+  if (thumbnailUrl) {
+    return (
+      <img
+        src={thumbnailUrl}
+        alt=""
+        className="aspect-video w-full rounded-md border border-neutral-200 object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex aspect-video w-full items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 text-neutral-500">
+      <FileVideo className={iconClassName} />
+    </div>
+  );
+}
+
 function VideoDataView({
   video,
   form,
   onFormChange,
   metadataError,
+  thumbnailError,
   metadataRefreshing,
   action,
   onSave,
-  onRefreshMetadata
+  onRefreshMetadata,
+  onThumbnailUpload
 }: {
   video: YouTubeVideo;
   form: VideoTranscriptForm;
   onFormChange: VideoTranscriptFormChange;
   metadataError: string;
+  thumbnailError: string;
   metadataRefreshing: boolean;
   action: VideoAction;
   onSave: () => void;
   onRefreshMetadata: () => void;
+  onThumbnailUpload: (file: File) => void;
 }) {
   const isYouTubeVideo = isYouTubeLibraryVideo(video);
+  const handleThumbnailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) {
+      onThumbnailUpload(file);
+    }
+  };
 
   return (
     <section className="grid gap-5">
@@ -2048,6 +2090,32 @@ function VideoDataView({
       {metadataError && (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{metadataError}</p>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Превью</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-[minmax(220px,360px)_minmax(0,1fr)] md:items-start">
+          <VideoThumbnailPreview video={video} iconClassName="h-10 w-10" />
+          <div className="grid gap-3">
+            <label className="grid gap-2 text-sm font-medium">
+              Изображение
+              <Input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={action === 'thumbnail'}
+                onChange={handleThumbnailChange}
+              />
+            </label>
+            {action === 'thumbnail' && (
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">Загружаю превью...</p>
+            )}
+            {thumbnailError && (
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{thumbnailError}</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -2413,6 +2481,10 @@ function apiAssetUrl(value: string): string {
   if (!value) return '';
   if (/^https?:\/\//i.test(value)) return value;
   return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
+}
+
+function videoThumbnailUrl(video: Pick<YouTubeVideo, 'thumbnailUrl'>): string {
+  return apiAssetUrl(video.thumbnailUrl);
 }
 
 function buildTranscriptionStages(isFileMode: boolean, includeObsidian: boolean): Array<{ id: string; label: string }> {

@@ -96,6 +96,32 @@ describe('YouTube video library store', () => {
     }
   });
 
+  it('updates thumbnail URLs for any saved video', async () => {
+    let timestamp = 1000;
+    const store = createVideoLibraryStore({
+      dbPath: await tempDbPath(),
+      now: () => {
+        timestamp += 100;
+        return timestamp;
+      }
+    });
+
+    try {
+      const added = store.addLocalFile({
+        originalFileName: 'meeting-recording.mp4',
+        sourcePath: '/tmp/transcribator/meeting-recording.mp4'
+      });
+      const thumbnailUrl = `/videos/library/${encodeURIComponent(added.video.id)}/thumbnail/thumbnail-123.png`;
+      const updated = store.setThumbnailUrl(added.video.id, thumbnailUrl);
+
+      assert.equal(updated.thumbnailUrl, thumbnailUrl);
+      assert.equal(updated.updatedAt, 1200);
+      assert.equal(store.getVideoById(added.video.id)?.thumbnailUrl, thumbnailUrl);
+    } finally {
+      store.close();
+    }
+  });
+
   it('loads, stores and returns detailed YouTube metadata by video id', async () => {
     const store = createVideoLibraryStore({
       dbPath: await tempDbPath(),
@@ -157,6 +183,34 @@ describe('YouTube video library store', () => {
       assert.deepEqual(detail.video.tags, ['crm', 'youtube']);
       assert.equal(detail.video.formats[0]?.height, 1080);
       assert.equal(store.getVideoById(added.video.id)?.durationLabel, '1:02:03');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('keeps manually assigned thumbnails when refreshing YouTube metadata', async () => {
+    const store = createVideoLibraryStore({
+      dbPath: await tempDbPath(),
+      now: () => 123456,
+      metadataFetcher: async () => createMetadata({
+        title: 'Обновленное видео',
+        thumbnailUrl: 'https://img.youtube.com/vi/manual12345/maxresdefault.jpg'
+      })
+    });
+
+    try {
+      const added = store.addVideo({
+        url: 'https://www.youtube.com/watch?v=manual12345',
+        thumbnailUrl: 'https://img.youtube.com/vi/manual12345/hqdefault.jpg'
+      });
+      const thumbnailUrl = `/videos/library/${encodeURIComponent(added.video.id)}/thumbnail/thumbnail-123.jpg`;
+
+      store.setThumbnailUrl(added.video.id, thumbnailUrl);
+
+      const detail = await store.getVideoDetail(added.video.id, { refresh: true });
+
+      assert.equal(detail.video.title, 'Обновленное видео');
+      assert.equal(detail.video.thumbnailUrl, thumbnailUrl);
     } finally {
       store.close();
     }
