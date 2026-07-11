@@ -445,12 +445,14 @@ describe('YouTube video library store', () => {
 
       const updated = store.updateTranscript(added.video.id, {
         title: 'Интервью с клиентом',
+        manualDate: '2026-07-11',
         description: 'Контекст для последующей ручной разметки.',
         channelTitle: 'Локальные интервью',
         cleanText: 'Clean transcript'
       });
 
       assert.equal(updated.title, 'Интервью с клиентом');
+      assert.equal(updated.manualDate, '2026-07-11');
       assert.equal(updated.description, 'Контекст для последующей ручной разметки.');
       assert.equal(updated.channelTitle, 'Локальные интервью');
       assert.equal(updated.cleanText, 'Clean transcript');

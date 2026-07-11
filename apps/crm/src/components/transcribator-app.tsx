@@ -140,6 +140,7 @@ interface StageState {
 
 interface VideoTranscriptForm {
   title: string;
+  manualDate: string;
   description: string;
   channelTitle: string;
   summary: string;
@@ -2162,6 +2163,10 @@ function VideoDataView({
             Название
             <Input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} />
           </label>
+          <label className="grid w-full max-w-36 gap-2 text-sm font-medium">
+            Дата
+            <Input type="date" value={form.manualDate} onChange={(event) => onFormChange('manualDate', event.target.value)} />
+          </label>
           <label className="grid gap-2 text-sm font-medium">
             {isYouTubeVideo ? 'Канал' : 'Источник / заметка'}
             <Input value={form.channelTitle} onChange={(event) => onFormChange('channelTitle', event.target.value)} />
@@ -2496,6 +2501,7 @@ function videoSourceLabel(video: YouTubeVideo): string {
 function createVideoTranscriptForm(video?: YouTubeVideo): VideoTranscriptForm {
   return {
     title: video?.title || video?.originalFileName || '',
+    manualDate: video?.manualDate || '',
     description: video?.description || '',
     channelTitle: video?.channelTitle || '',
     summary: video?.summary || '',

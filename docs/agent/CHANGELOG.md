@@ -4,6 +4,10 @@
 
 ## 2026-07-11
 
+- Добавлено: в CRM-деталке `/videos/[id]` во вкладке «Данные видео» карточка получила ручное поле «Дата» после названия; API/SQLite сохраняют его как `manualDate`/`manual_date`, не заполняя автоматически из YouTube metadata или транскрибации.
+- Проверено: `pnpm --filter @transcribator/api test`; `pnpm --filter @transcribator/api typecheck`; `pnpm --filter @transcribator/api build`; `pnpm --filter @transcribator/shared check`; `pnpm --filter @transcribator/api-client check`; `pnpm --filter @transcribator/crm check`; `pnpm --filter @transcribator/api exec node --test --import tsx ../../packages/api-client/src/index.test.ts`; `git diff --check`.
+- Документация: обновлены `docs/agent/PROJECT_MAP.md`, `docs/agent/INFRASTRUCTURE.md` и `docs/agent/CHANGELOG.md`.
+
 - Изменено: в CRM-текстах транскрипции подписи `Summary`, `Formatted transcript` и `Clean transcript` переведены на русский, а поле `Raw transcript` скрыто из редактора вкладки «Транскрипция» деталки видео без изменения хранения `rawText`.
 - Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
 - Документация: обновлен `docs/agent/CHANGELOG.md`.

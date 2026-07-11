@@ -62,6 +62,7 @@ export const stageSummarySchema = z.object({
 export const videoCompressionPresetSchema = z.enum(['high', 'balanced', 'small']);
 export const youtubeVideoStatusSchema = z.enum(['added', 'processing', 'done', 'error']);
 export const videoSourceTypeSchema = z.enum(['youtube', 'file']);
+const manualVideoDateSchema = z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/, 'Дата должна быть пустой или в формате YYYY-MM-DD.');
 
 export const screenshotFileNameSchema = z
   .string()
@@ -130,6 +131,7 @@ export const progressEventSchema = z.discriminatedUnion('type', [
 
 export const updateYouTubeVideoTranscriptRequestSchema = z.object({
   title: z.string().max(500).optional(),
+  manualDate: manualVideoDateSchema.optional(),
   description: z.string().optional(),
   channelTitle: z.string().max(300).optional(),
   summary: z.string().optional(),
@@ -185,6 +187,7 @@ export const youtubeVideoSchema = z.object({
   sourcePath: z.string().default(''),
   originalFileName: z.string().default(''),
   title: z.string().default(''),
+  manualDate: manualVideoDateSchema.default(''),
   description: z.string().default(''),
   channelTitle: z.string().default(''),
   channelId: z.string().default(''),

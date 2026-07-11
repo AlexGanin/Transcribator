@@ -134,6 +134,7 @@ export class VideoLibraryStore {
       sourcePath: '',
       originalFileName: '',
       title: normalizeText(input.title),
+      manualDate: '',
       description: '',
       channelTitle: normalizeText(input.channelTitle),
       channelId: '',
@@ -184,12 +185,13 @@ export class VideoLibraryStore {
         source_path,
         original_file_name,
         title,
+        manual_date,
         channel_title,
         thumbnail_url,
         status,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       video.id,
       video.sourceType,
@@ -198,6 +200,7 @@ export class VideoLibraryStore {
       video.sourcePath,
       video.originalFileName,
       video.title,
+      video.manualDate,
       video.channelTitle,
       video.thumbnailUrl,
       video.status,
@@ -229,6 +232,7 @@ export class VideoLibraryStore {
       sourcePath,
       originalFileName,
       title: normalizeText(input.title) || originalFileName,
+      manualDate: '',
       description: '',
       channelTitle: DEFAULT_TRANSCRIPTION_SOURCE_LABEL,
       channelId: '',
@@ -279,11 +283,12 @@ export class VideoLibraryStore {
         source_path,
         original_file_name,
         title,
+        manual_date,
         channel_title,
         status,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       video.id,
       video.sourceType,
@@ -292,6 +297,7 @@ export class VideoLibraryStore {
       video.sourcePath,
       video.originalFileName,
       video.title,
+      video.manualDate,
       video.channelTitle,
       video.status,
       video.createdAt,
@@ -475,6 +481,7 @@ export class VideoLibraryStore {
       UPDATE youtube_videos
       SET
         title = COALESCE(?, title),
+        manual_date = COALESCE(?, manual_date),
         description = COALESCE(?, description),
         channel_title = COALESCE(?, channel_title),
         summary = COALESCE(?, summary),
@@ -488,6 +495,7 @@ export class VideoLibraryStore {
       WHERE id = ?
     `).run(
       patch.title ?? null,
+      patch.manualDate ?? null,
       patch.description ?? null,
       patch.channelTitle ?? null,
       patch.summary ?? null,
@@ -665,6 +673,7 @@ export class VideoLibraryStore {
         source_path TEXT NOT NULL DEFAULT '',
         original_file_name TEXT NOT NULL DEFAULT '',
         title TEXT NOT NULL DEFAULT '',
+        manual_date TEXT NOT NULL DEFAULT '',
         description TEXT NOT NULL DEFAULT '',
         channel_title TEXT NOT NULL DEFAULT '',
         channel_id TEXT NOT NULL DEFAULT '',
@@ -713,6 +722,7 @@ export class VideoLibraryStore {
     this.ensureColumn('source_type', "TEXT NOT NULL DEFAULT 'youtube'");
     this.ensureColumn('source_path', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('original_file_name', "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn('manual_date', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('description', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('channel_id', "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn('channel_url', "TEXT NOT NULL DEFAULT ''");
@@ -818,6 +828,7 @@ interface YouTubeVideoRow {
   source_path?: string | null;
   original_file_name?: string | null;
   title: string;
+  manual_date: string;
   description: string;
   channel_title: string;
   channel_id: string;
@@ -871,6 +882,7 @@ function mapYouTubeVideoRow(row: YouTubeVideoRow): YouTubeVideo {
     sourcePath: row.source_path || '',
     originalFileName: row.original_file_name || '',
     title: row.title || '',
+    manualDate: row.manual_date || '',
     description: row.description || '',
     channelTitle: row.channel_title || '',
     channelId: row.channel_id || '',

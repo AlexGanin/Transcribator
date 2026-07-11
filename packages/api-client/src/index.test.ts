@@ -193,6 +193,7 @@ describe('api client defaults', () => {
           youtubeVideoId: 'dQw4w9WgXcQ',
           url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           title: 'Видео',
+          manualDate: '2026-07-11',
           status: 'done',
           cleanText: 'clean',
           createdAt: 1,
@@ -201,12 +202,19 @@ describe('api client defaults', () => {
       }), { headers: { 'Content-Type': 'application/json' } });
     };
 
-    const result = await createApiClient({ fetchImpl }).updateYouTubeVideoTranscript('video-id', { cleanText: 'clean' });
+    const result = await createApiClient({ fetchImpl }).updateYouTubeVideoTranscript('video-id', {
+      manualDate: '2026-07-11',
+      cleanText: 'clean'
+    });
 
+    assert.equal(result.video.manualDate, '2026-07-11');
     assert.equal(result.video.cleanText, 'clean');
     assert.equal(requests[0]?.url, 'http://127.0.0.1:2001/videos/library/video-id/transcript');
     assert.equal(requests[0]?.init.method, 'PATCH');
-    assert.deepEqual(JSON.parse(String(requests[0]?.init.body)), { cleanText: 'clean' });
+    assert.deepEqual(JSON.parse(String(requests[0]?.init.body)), {
+      manualDate: '2026-07-11',
+      cleanText: 'clean'
+    });
   });
 
   it('uploads a video thumbnail as multipart form data', async () => {
