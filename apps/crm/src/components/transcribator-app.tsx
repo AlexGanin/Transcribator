@@ -49,6 +49,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
   cn
 } from '@transcribator/ui';
@@ -143,6 +147,8 @@ interface VideoTranscriptForm {
   cleanText: string;
   rawText: string;
 }
+
+type VideoTranscriptFormChange = <K extends keyof VideoTranscriptForm>(key: K, value: VideoTranscriptForm[K]) => void;
 
 interface LightboxState {
   scope: ScreenshotScope;
@@ -1283,26 +1289,10 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                   Назад
                 </Link>
               </Button>
-              {youtubeVideoDetail && isYouTubeLibraryVideo(youtubeVideoDetail) && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-fit"
-                  onClick={() => void refreshYouTubeVideoMetadata(youtubeVideoDetail.id)}
-                  disabled={youtubeVideoDetailRefreshing}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Обновить метаданные
-                </Button>
-              )}
             </div>
 
             {youtubeVideoDetailError && (
               <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">{youtubeVideoDetailError}</p>
-            )}
-
-            {youtubeVideoMetadataError && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{youtubeVideoMetadataError}</p>
             )}
 
             {youtubeVideoDetailLoading && (
@@ -1348,230 +1338,135 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                   </div>
                 </article>
 
-                <section className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px] md:items-end">
-                    <label className="grid gap-2 text-sm font-medium">
-                      Transcription engine
-                      <Select
-                        value={engine}
-                        onValueChange={(value) => setEngine(value as TranscriptionEngine)}
-                        disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing'}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TRANSCRIPTION_ENGINES.map((option) => (
-                            <SelectItem value={option.value} key={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    <Button
-                      type="button"
-                      className="w-fit"
-                      onClick={() => void startYouTubeVideoTranscription(youtubeVideoDetail)}
-                      disabled={youtubeVideoDetail.status === 'processing' || youtubeVideoAction === 'transcribe'}
-                    >
-                      <Play className="h-4 w-4" />
-                      {youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing' ? 'Транскрибирую...' : 'Транскрибировать'}
-                    </Button>
-                  </div>
+                <Tabs defaultValue="data" className="grid gap-4">
+                  <TabsList className="h-auto w-full flex-wrap justify-start">
+                    <TabsTrigger value="data">Данные видео</TabsTrigger>
+                    <TabsTrigger value="transcription">Транскрипция</TabsTrigger>
+                    <TabsTrigger value="screenshots">Скриншоты</TabsTrigger>
+                    {isYouTubeLibraryVideo(youtubeVideoDetail) && <TabsTrigger value="formats">Форматы</TabsTrigger>}
+                  </TabsList>
 
-                  <div className="grid gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        checked={youtubeVideoScreenshotsEnabled}
-                        onChange={(event) => setYoutubeVideoScreenshotsEnabled(event.target.checked)}
-                        disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing'}
-                        className="h-4 w-4"
+                  <TabsContent value="transcription" className="mt-0 grid gap-4">
+                    <section className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
+                        <label className="grid gap-2 text-sm font-medium">
+                          Transcription engine
+                          <Select
+                            value={engine}
+                            onValueChange={(value) => setEngine(value as TranscriptionEngine)}
+                            disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing'}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TRANSCRIPTION_ENGINES.map((option) => (
+                                <SelectItem value={option.value} key={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <Button
+                          type="button"
+                          className="w-fit"
+                          onClick={() => void startYouTubeVideoTranscription(youtubeVideoDetail)}
+                          disabled={youtubeVideoDetail.status === 'processing' || youtubeVideoAction === 'transcribe'}
+                        >
+                          <Play className="h-4 w-4" />
+                          {youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing' ? 'Транскрибирую...' : 'Транскрибировать'}
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={youtubeVideoScreenshotsEnabled}
+                            onChange={(event) => setYoutubeVideoScreenshotsEnabled(event.target.checked)}
+                            disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing'}
+                            className="h-4 w-4"
+                          />
+                          <Images className="h-4 w-4" />
+                          Создавать скриншоты
+                        </label>
+
+                        <label className="grid gap-2 text-sm font-medium">
+                          Интервал скриншотов, сек
+                          <Input
+                            type="number"
+                            min={1}
+                            max={3600}
+                            step={1}
+                            value={youtubeVideoScreenshotIntervalSeconds}
+                            onChange={(event) => setYoutubeVideoScreenshotIntervalSeconds(normalizeScreenshotIntervalInput(event.target.value))}
+                            disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing' || !youtubeVideoScreenshotsEnabled}
+                          />
+                        </label>
+                      </div>
+                    </section>
+
+                    {youtubeVideoTranscriptionStages.length > 0 && youtubeVideoTranscriptionStatus !== 'idle' && (
+                      <ProgressPanel
+                        stages={youtubeVideoTranscriptionStages}
+                        status={youtubeVideoTranscriptionStatus}
+                        elapsedSeconds={youtubeVideoTranscriptionElapsedSeconds}
                       />
-                      <Images className="h-4 w-4" />
-                      Создавать скриншоты
-                    </label>
+                    )}
 
-                    <label className="grid gap-2 text-sm font-medium">
-                      Интервал скриншотов, сек
-                      <Input
-                        type="number"
-                        min={1}
-                        max={3600}
-                        step={1}
-                        value={youtubeVideoScreenshotIntervalSeconds}
-                        onChange={(event) => setYoutubeVideoScreenshotIntervalSeconds(normalizeScreenshotIntervalInput(event.target.value))}
-                        disabled={youtubeVideoAction === 'transcribe' || youtubeVideoDetail.status === 'processing' || !youtubeVideoScreenshotsEnabled}
-                      />
-                    </label>
-                  </div>
+                    {youtubeVideoDetail.transcriptionError && (
+                      <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                        {youtubeVideoDetail.transcriptionError}
+                      </p>
+                    )}
 
-                  {youtubeVideoTranscriptionStages.length > 0 && youtubeVideoTranscriptionStatus !== 'idle' && (
-                    <ProgressPanel
-                      stages={youtubeVideoTranscriptionStages}
-                      status={youtubeVideoTranscriptionStatus}
-                      elapsedSeconds={youtubeVideoTranscriptionElapsedSeconds}
+                    <VideoTranscriptView
+                      form={youtubeVideoTranscriptForm}
+                      onSave={() => void saveYouTubeVideoTranscript()}
+                      onFormat={() => void formatYouTubeVideoTranscript()}
+                      onCreateMarkdown={() => void createYouTubeVideoMarkdown()}
+                      onFormChange={updateVideoTranscriptForm}
+                      action={youtubeVideoAction}
+                      cleanCopyStatus={cleanTranscriptCopyStatus}
+                      onCopyCleanTranscript={() => void copyCleanTranscript(youtubeVideoTranscriptForm.cleanText)}
                     />
-                  )}
+                  </TabsContent>
 
-                  {youtubeVideoDetail.transcriptionError && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-                      {youtubeVideoDetail.transcriptionError}
-                    </p>
-                  )}
-                </section>
+                  <TabsContent value="screenshots" className="mt-0 grid gap-4">
+                    <VideoScreenshotsView
+                      video={youtubeVideoDetail}
+                      action={youtubeVideoAction}
+                      selectedActive={selectedActiveScreenshots}
+                      selectedTrash={selectedTrashedScreenshots}
+                      onToggleActive={toggleActiveScreenshot}
+                      onToggleTrash={toggleTrashedScreenshot}
+                      onTrashSelected={() => void trashSelectedScreenshots()}
+                      onRestoreSelected={() => void restoreSelectedScreenshots()}
+                      onClearTrash={() => void clearScreenshotsTrash()}
+                      onOpenLightbox={openLightbox}
+                    />
+                  </TabsContent>
 
-                <section className="grid gap-3 md:grid-cols-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Основное</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-2 text-sm">
-                      {renderMetaRow('ID в CRM', youtubeVideoDetail.id)}
-                      {renderMetaRow('Источник', videoSourceLabel(youtubeVideoDetail))}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail)
-                        ? renderMetaRow('YouTube ID', youtubeVideoDetail.youtubeVideoId)
-                        : renderMetaRow('Файл', youtubeVideoDetail.originalFileName)}
-                      {renderMetaRow('Добавлено', formatDateTime(youtubeVideoDetail.createdAt))}
-                      {renderMetaRow('Обновлено', formatDateTime(youtubeVideoDetail.updatedAt))}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Метаданные загружены', youtubeVideoDetail.metadataFetchedAt ? formatDateTime(youtubeVideoDetail.metadataFetchedAt) : '')}
-                      {renderMetaRow('Длительность', formatVideoDuration(youtubeVideoDetail))}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Дата загрузки', formatYouTubeUploadDate(youtubeVideoDetail.uploadDate))}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Timestamp публикации', youtubeVideoDetail.timestamp ? formatDateTime(youtubeVideoDetail.timestamp * 1000) : '')}
-                      {renderMetaRow(isYouTubeLibraryVideo(youtubeVideoDetail) ? 'Ссылка' : 'Source path', isYouTubeLibraryVideo(youtubeVideoDetail) ? youtubeVideoDetail.webpageUrl || youtubeVideoDetail.url : youtubeVideoDetail.sourcePath)}
-                      {renderMetaRow('Транскрипт', formatTranscriptAvailability(youtubeVideoDetail))}
-                      {renderMetaRow('Job', youtubeVideoDetail.transcriptionJobId)}
-                      {renderMetaRow('Engine', youtubeVideoDetail.transcriptionEngine)}
-                      {renderMetaRow('Старт транскрибации', youtubeVideoDetail.transcriptionStartedAt ? formatDateTime(youtubeVideoDetail.transcriptionStartedAt) : '')}
-                      {renderMetaRow('Финиш транскрибации', youtubeVideoDetail.transcriptionFinishedAt ? formatDateTime(youtubeVideoDetail.transcriptionFinishedAt) : '')}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{isYouTubeLibraryVideo(youtubeVideoDetail) ? 'Канал' : 'Источник'}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-2 text-sm">
-                      {renderMetaRow(isYouTubeLibraryVideo(youtubeVideoDetail) ? 'Канал' : 'Источник / заметка', youtubeVideoDetail.channelTitle)}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Channel ID', youtubeVideoDetail.channelId)}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Channel URL', youtubeVideoDetail.channelUrl)}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Uploader', youtubeVideoDetail.uploader)}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Uploader ID', youtubeVideoDetail.uploaderId)}
-                      {isYouTubeLibraryVideo(youtubeVideoDetail) && renderMetaRow('Uploader URL', youtubeVideoDetail.uploaderUrl)}
-                    </CardContent>
-                  </Card>
+                  <TabsContent value="data" className="mt-0 grid gap-4">
+                    <VideoDataView
+                      video={youtubeVideoDetail}
+                      form={youtubeVideoTranscriptForm}
+                      onFormChange={updateVideoTranscriptForm}
+                      metadataError={youtubeVideoMetadataError}
+                      metadataRefreshing={youtubeVideoDetailRefreshing}
+                      action={youtubeVideoAction}
+                      onSave={() => void saveYouTubeVideoTranscript()}
+                      onRefreshMetadata={() => void refreshYouTubeVideoMetadata(youtubeVideoDetail.id)}
+                    />
+                  </TabsContent>
 
                   {isYouTubeLibraryVideo(youtubeVideoDetail) && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Статистика</CardTitle>
-                      </CardHeader>
-                      <CardContent className="grid gap-2 text-sm">
-                        {renderMetaRow('Просмотры', formatOptionalNumber(youtubeVideoDetail.viewCount))}
-                        {renderMetaRow('Лайки', formatOptionalNumber(youtubeVideoDetail.likeCount))}
-                        {renderMetaRow('Комментарии', formatOptionalNumber(youtubeVideoDetail.commentCount))}
-                        {renderMetaRow('Язык', youtubeVideoDetail.language)}
-                        {renderMetaRow('Доступность', youtubeVideoDetail.availability)}
-                        {renderMetaRow('Live status', youtubeVideoDetail.liveStatus)}
-                        {renderMetaRow('Возрастное ограничение', youtubeVideoDetail.ageLimit === null ? '' : `${youtubeVideoDetail.ageLimit}+`)}
-                      </CardContent>
-                    </Card>
+                    <TabsContent value="formats" className="mt-0 grid gap-4">
+                      <VideoFormatsView video={youtubeVideoDetail} />
+                    </TabsContent>
                   )}
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Теги и категории</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-3 text-sm">
-                      <div className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase text-neutral-500">Категории</span>
-                        <div className="flex flex-wrap gap-2">
-                          {youtubeVideoDetail.categories.length > 0
-                            ? youtubeVideoDetail.categories.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)
-                            : <span className="text-neutral-500">Нет данных</span>}
-                        </div>
-                      </div>
-                      <div className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase text-neutral-500">Теги</span>
-                        <div className="flex flex-wrap gap-2">
-                          {youtubeVideoDetail.tags.length > 0
-                            ? youtubeVideoDetail.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)
-                            : <span className="text-neutral-500">Нет данных</span>}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </section>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Описание</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-800">{youtubeVideoDetail.description || 'Нет данных'}</p>
-                  </CardContent>
-                </Card>
-
-                <VideoTranscriptView
-                  video={youtubeVideoDetail}
-                  form={youtubeVideoTranscriptForm}
-                  onSave={() => void saveYouTubeVideoTranscript()}
-                  onFormat={() => void formatYouTubeVideoTranscript()}
-                  onCreateMarkdown={() => void createYouTubeVideoMarkdown()}
-                  onFormChange={updateVideoTranscriptForm}
-                  action={youtubeVideoAction}
-                  selectedActive={selectedActiveScreenshots}
-                  selectedTrash={selectedTrashedScreenshots}
-                  onToggleActive={toggleActiveScreenshot}
-                  onToggleTrash={toggleTrashedScreenshot}
-                  onTrashSelected={() => void trashSelectedScreenshots()}
-                  onRestoreSelected={() => void restoreSelectedScreenshots()}
-                  onClearTrash={() => void clearScreenshotsTrash()}
-                  onOpenLightbox={openLightbox}
-                  cleanCopyStatus={cleanTranscriptCopyStatus}
-                  onCopyCleanTranscript={() => void copyCleanTranscript(youtubeVideoTranscriptForm.cleanText)}
-                />
-
-                {isYouTubeLibraryVideo(youtubeVideoDetail) && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Форматы</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {youtubeVideoDetail.formats.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                            <thead>
-                              <tr className="border-b border-neutral-200 text-xs uppercase text-neutral-500">
-                                <th className="py-2 pr-3">Формат</th>
-                                <th className="py-2 pr-3">Разрешение</th>
-                                <th className="py-2 pr-3">FPS</th>
-                                <th className="py-2 pr-3">Расширение</th>
-                                <th className="py-2 pr-3">Размер</th>
-                                <th className="py-2 pr-3">Аудио</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {youtubeVideoDetail.formats.map((format) => (
-                                <tr key={format.id} className="border-b border-neutral-100">
-                                  <td className="py-2 pr-3 font-medium">{format.label || format.id}</td>
-                                  <td className="py-2 pr-3">{format.resolution || (format.width && format.height ? `${format.width}x${format.height}` : '') || '—'}</td>
-                                  <td className="py-2 pr-3">{format.fps || '—'}</td>
-                                  <td className="py-2 pr-3">{format.ext || '—'}</td>
-                                  <td className="py-2 pr-3">{format.sizeLabel || '—'}</td>
-                                  <td className="py-2 pr-3">{format.hasAudio ? 'Есть' : 'Отдельно'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-neutral-600">Нет данных о форматах.</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
+                </Tabs>
               </section>
             )}
           </section>
@@ -1934,58 +1829,28 @@ function VideoSourceBadge({ video }: { video: YouTubeVideo }) {
 }
 
 function VideoTranscriptView({
-  video,
   form,
   onSave,
   onFormat,
   onCreateMarkdown,
   onFormChange,
   action,
-  selectedActive,
-  selectedTrash,
-  onToggleActive,
-  onToggleTrash,
-  onTrashSelected,
-  onRestoreSelected,
-  onClearTrash,
-  onOpenLightbox,
   cleanCopyStatus,
   onCopyCleanTranscript
 }: {
-  video: YouTubeVideo;
   form: VideoTranscriptForm;
   onSave: () => void;
   onFormat: () => void;
   onCreateMarkdown: () => void;
-  onFormChange: <K extends keyof VideoTranscriptForm>(key: K, value: VideoTranscriptForm[K]) => void;
+  onFormChange: VideoTranscriptFormChange;
   action: VideoAction;
-  selectedActive: string[];
-  selectedTrash: string[];
-  onToggleActive: (fileName: string, checked: boolean) => void;
-  onToggleTrash: (fileName: string, checked: boolean) => void;
-  onTrashSelected: () => void;
-  onRestoreSelected: () => void;
-  onClearTrash: () => void;
-  onOpenLightbox: (scope: ScreenshotScope, screenshot: VideoScreenshot) => void;
   cleanCopyStatus: CopyStatus;
   onCopyCleanTranscript: () => void;
 }) {
-  const systemFields: Array<[string, string | number | undefined]> = [
-    ['sourceType', videoSourceLabel(video)],
-    ['status', formatYouTubeVideoStatus(video.status)],
-    ['transcriptionJobId', video.transcriptionJobId],
-    ['transcriptionEngine', video.transcriptionEngine || 'Default engine'],
-    ['startedAt', video.transcriptionStartedAt ? formatDateTime(video.transcriptionStartedAt) : ''],
-    ['finishedAt', video.transcriptionFinishedAt ? formatDateTime(video.transcriptionFinishedAt) : ''],
-    ['markdownPath', video.markdownPath],
-    ['screenshots', video.screenshots.length],
-    ['trash', video.trashedScreenshots.length]
-  ];
-
   return (
     <section className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-xl font-semibold">Транскрипция</h3>
+        <h3 className="text-xl font-semibold">Текст транскрипции</h3>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={onFormat} disabled={action === 'format'}>
             <Sparkles className={cn('h-4 w-4', action === 'format' && 'animate-pulse')} />
@@ -2001,45 +1866,6 @@ function VideoTranscriptView({
           </Button>
         </div>
       </div>
-
-      <Card>
-        <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <CardTitle className="break-words">{videoDisplayTitle(video)}</CardTitle>
-            <p className="mt-1 break-words text-sm text-neutral-600">
-              {isYouTubeLibraryVideo(video) ? video.url : video.originalFileName || video.sourcePath}
-            </p>
-          </div>
-          <Badge variant={video.status === 'done' ? 'success' : video.status === 'error' ? 'error' : 'secondary'}>
-            {formatYouTubeVideoStatus(video.status)}
-          </Badge>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          {systemFields.map(([label, value]) => (
-            <ReadonlyField label={label} value={value} key={label} />
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Карточка</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <label className="grid gap-2 text-sm font-medium">
-            Название
-            <Input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            {isYouTubeLibraryVideo(video) ? 'Канал' : 'Источник / заметка'}
-            <Input value={form.channelTitle} onChange={(event) => onFormChange('channelTitle', event.target.value)} />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            Описание
-            <Textarea className="min-h-32" value={form.description} onChange={(event) => onFormChange('description', event.target.value)} />
-          </label>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -2080,71 +1906,302 @@ function VideoTranscriptView({
           </label>
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <Card>
-          <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle>Галерея</CardTitle>
-              <p className="mt-1 text-sm text-neutral-600">Активные скриншоты попадают в transcript.md.</p>
-            </div>
-            <Button type="button" variant="secondary" onClick={onTrashSelected} disabled={selectedActive.length === 0 || action === 'trash'}>
-              <Trash2 className="h-4 w-4" />
-              {action === 'trash' ? 'Переношу...' : `В корзину (${selectedActive.length})`}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <ScreenshotGrid
-              screenshots={video.screenshots}
-              scope="active"
-              selected={selectedActive}
-              emptyText="Активных скриншотов нет."
-              onToggle={onToggleActive}
-              onOpen={onOpenLightbox}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="grid gap-3">
-            <div>
-              <CardTitle>Корзина</CardTitle>
-              <p className="mt-1 text-sm text-neutral-600">Файлы здесь уже исключены из Markdown.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onRestoreSelected}
-                disabled={selectedTrash.length === 0 || action === 'restore'}
-              >
-                <RotateCcw className="h-4 w-4" />
-                {action === 'restore' ? 'Восстанавливаю...' : `Вернуть (${selectedTrash.length})`}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onClearTrash}
-                disabled={video.trashedScreenshots.length === 0 || action === 'clear'}
-              >
-                <Trash2 className="h-4 w-4" />
-                {action === 'clear' ? 'Удаляю...' : 'Очистить'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ScreenshotGrid
-              screenshots={video.trashedScreenshots}
-              scope="trash"
-              selected={selectedTrash}
-              emptyText="Корзина пуста."
-              onToggle={onToggleTrash}
-              onOpen={onOpenLightbox}
-            />
-          </CardContent>
-        </Card>
-      </div>
     </section>
+  );
+}
+
+function VideoScreenshotsView({
+  video,
+  action,
+  selectedActive,
+  selectedTrash,
+  onToggleActive,
+  onToggleTrash,
+  onTrashSelected,
+  onRestoreSelected,
+  onClearTrash,
+  onOpenLightbox
+}: {
+  video: YouTubeVideo;
+  action: VideoAction;
+  selectedActive: string[];
+  selectedTrash: string[];
+  onToggleActive: (fileName: string, checked: boolean) => void;
+  onToggleTrash: (fileName: string, checked: boolean) => void;
+  onTrashSelected: () => void;
+  onRestoreSelected: () => void;
+  onClearTrash: () => void;
+  onOpenLightbox: (scope: ScreenshotScope, screenshot: VideoScreenshot) => void;
+}) {
+  return (
+    <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <Card>
+        <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Галерея</CardTitle>
+            <p className="mt-1 text-sm text-neutral-600">Активные скриншоты попадают в transcript.md.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={onTrashSelected} disabled={selectedActive.length === 0 || action === 'trash'}>
+            <Trash2 className="h-4 w-4" />
+            {action === 'trash' ? 'Переношу...' : `В корзину (${selectedActive.length})`}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <ScreenshotGrid
+            screenshots={video.screenshots}
+            scope="active"
+            selected={selectedActive}
+            emptyText="Активных скриншотов нет."
+            onToggle={onToggleActive}
+            onOpen={onOpenLightbox}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="grid gap-3">
+          <div>
+            <CardTitle>Корзина</CardTitle>
+            <p className="mt-1 text-sm text-neutral-600">Файлы здесь уже исключены из Markdown.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onRestoreSelected}
+              disabled={selectedTrash.length === 0 || action === 'restore'}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {action === 'restore' ? 'Восстанавливаю...' : `Вернуть (${selectedTrash.length})`}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClearTrash}
+              disabled={video.trashedScreenshots.length === 0 || action === 'clear'}
+            >
+              <Trash2 className="h-4 w-4" />
+              {action === 'clear' ? 'Удаляю...' : 'Очистить'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ScreenshotGrid
+            screenshots={video.trashedScreenshots}
+            scope="trash"
+            selected={selectedTrash}
+            emptyText="Корзина пуста."
+            onToggle={onToggleTrash}
+            onOpen={onOpenLightbox}
+          />
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function VideoDataView({
+  video,
+  form,
+  onFormChange,
+  metadataError,
+  metadataRefreshing,
+  action,
+  onSave,
+  onRefreshMetadata
+}: {
+  video: YouTubeVideo;
+  form: VideoTranscriptForm;
+  onFormChange: VideoTranscriptFormChange;
+  metadataError: string;
+  metadataRefreshing: boolean;
+  action: VideoAction;
+  onSave: () => void;
+  onRefreshMetadata: () => void;
+}) {
+  const isYouTubeVideo = isYouTubeLibraryVideo(video);
+
+  return (
+    <section className="grid gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xl font-semibold">Данные видео</h3>
+        <div className="flex flex-wrap gap-2">
+          {isYouTubeVideo && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-fit"
+              onClick={onRefreshMetadata}
+              disabled={metadataRefreshing}
+            >
+              <RefreshCw className={cn('h-4 w-4', metadataRefreshing && 'animate-spin')} />
+              {metadataRefreshing ? 'Обновляю...' : 'Обновить метаданные'}
+            </Button>
+          )}
+          <Button type="button" className="w-fit" onClick={onSave} disabled={action === 'save'}>
+            <Save className="h-4 w-4" />
+            {action === 'save' ? 'Сохраняю...' : 'Сохранить правки'}
+          </Button>
+        </div>
+      </div>
+
+      {metadataError && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{metadataError}</p>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Карточка</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <label className="grid gap-2 text-sm font-medium">
+            Название
+            <Input value={form.title} onChange={(event) => onFormChange('title', event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            {isYouTubeVideo ? 'Канал' : 'Источник / заметка'}
+            <Input value={form.channelTitle} onChange={(event) => onFormChange('channelTitle', event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            Описание
+            <Textarea className="min-h-32" value={form.description} onChange={(event) => onFormChange('description', event.target.value)} />
+          </label>
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-3 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Основное</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {renderMetaRow('ID в CRM', video.id)}
+            {renderMetaRow('Источник', videoSourceLabel(video))}
+            {isYouTubeVideo
+              ? renderMetaRow('YouTube ID', video.youtubeVideoId)
+              : renderMetaRow('Файл', video.originalFileName)}
+            {renderMetaRow('Добавлено', formatDateTime(video.createdAt))}
+            {renderMetaRow('Обновлено', formatDateTime(video.updatedAt))}
+            {isYouTubeVideo && renderMetaRow('Метаданные загружены', video.metadataFetchedAt ? formatDateTime(video.metadataFetchedAt) : '')}
+            {renderMetaRow('Длительность', formatVideoDuration(video))}
+            {isYouTubeVideo && renderMetaRow('Дата загрузки', formatYouTubeUploadDate(video.uploadDate))}
+            {isYouTubeVideo && renderMetaRow('Timestamp публикации', video.timestamp ? formatDateTime(video.timestamp * 1000) : '')}
+            {renderMetaRow(isYouTubeVideo ? 'Ссылка' : 'Source path', isYouTubeVideo ? video.webpageUrl || video.url : video.sourcePath)}
+            {renderMetaRow('Транскрипт', formatTranscriptAvailability(video))}
+            {renderMetaRow('Job', video.transcriptionJobId)}
+            {renderMetaRow('Engine', video.transcriptionEngine)}
+            {renderMetaRow('Старт транскрибации', video.transcriptionStartedAt ? formatDateTime(video.transcriptionStartedAt) : '')}
+            {renderMetaRow('Финиш транскрибации', video.transcriptionFinishedAt ? formatDateTime(video.transcriptionFinishedAt) : '')}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{isYouTubeVideo ? 'Канал' : 'Источник'}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {renderMetaRow(isYouTubeVideo ? 'Канал' : 'Источник / заметка', video.channelTitle)}
+            {isYouTubeVideo && renderMetaRow('Channel ID', video.channelId)}
+            {isYouTubeVideo && renderMetaRow('Channel URL', video.channelUrl)}
+            {isYouTubeVideo && renderMetaRow('Uploader', video.uploader)}
+            {isYouTubeVideo && renderMetaRow('Uploader ID', video.uploaderId)}
+            {isYouTubeVideo && renderMetaRow('Uploader URL', video.uploaderUrl)}
+          </CardContent>
+        </Card>
+
+        {isYouTubeVideo && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Статистика</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 text-sm">
+              {renderMetaRow('Просмотры', formatOptionalNumber(video.viewCount))}
+              {renderMetaRow('Лайки', formatOptionalNumber(video.likeCount))}
+              {renderMetaRow('Комментарии', formatOptionalNumber(video.commentCount))}
+              {renderMetaRow('Язык', video.language)}
+              {renderMetaRow('Доступность', video.availability)}
+              {renderMetaRow('Live status', video.liveStatus)}
+              {renderMetaRow('Возрастное ограничение', video.ageLimit === null ? '' : `${video.ageLimit}+`)}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Теги и категории</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            <div className="grid gap-1">
+              <span className="text-xs font-semibold uppercase text-neutral-500">Категории</span>
+              <div className="flex flex-wrap gap-2">
+                {video.categories.length > 0
+                  ? video.categories.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)
+                  : <span className="text-neutral-500">Нет данных</span>}
+              </div>
+            </div>
+            <div className="grid gap-1">
+              <span className="text-xs font-semibold uppercase text-neutral-500">Теги</span>
+              <div className="flex flex-wrap gap-2">
+                {video.tags.length > 0
+                  ? video.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)
+                  : <span className="text-neutral-500">Нет данных</span>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Описание</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-800">{video.description || 'Нет данных'}</p>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function VideoFormatsView({ video }: { video: YouTubeVideo }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Форматы</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {video.formats.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-xs uppercase text-neutral-500">
+                  <th className="py-2 pr-3">Формат</th>
+                  <th className="py-2 pr-3">Разрешение</th>
+                  <th className="py-2 pr-3">FPS</th>
+                  <th className="py-2 pr-3">Расширение</th>
+                  <th className="py-2 pr-3">Размер</th>
+                  <th className="py-2 pr-3">Аудио</th>
+                </tr>
+              </thead>
+              <tbody>
+                {video.formats.map((format) => (
+                  <tr key={format.id} className="border-b border-neutral-100">
+                    <td className="py-2 pr-3 font-medium">{format.label || format.id}</td>
+                    <td className="py-2 pr-3">{format.resolution || (format.width && format.height ? `${format.width}x${format.height}` : '') || '—'}</td>
+                    <td className="py-2 pr-3">{format.fps || '—'}</td>
+                    <td className="py-2 pr-3">{format.ext || '—'}</td>
+                    <td className="py-2 pr-3">{format.sizeLabel || '—'}</td>
+                    <td className="py-2 pr-3">{format.hasAudio ? 'Есть' : 'Отдельно'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-neutral-600">Нет данных о форматах.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2296,15 +2353,6 @@ function ScreenshotLightbox({
           {screenshot.fileName} · {lightbox.scope === 'trash' ? 'корзина' : 'галерея'} · {lightbox.index + 1}/{totalItems}
         </figcaption>
       </figure>
-    </div>
-  );
-}
-
-function ReadonlyField({ label, value }: { label: string; value: string | number | undefined }) {
-  return (
-    <div className="grid gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-3">
-      <span className="text-xs font-medium uppercase text-neutral-500">{label}</span>
-      <span className="break-words text-sm text-neutral-900">{String(value || 'Нет данных')}</span>
     </div>
   );
 }

@@ -4,6 +4,10 @@
 
 ## 2026-07-11
 
+- Изменено: деталка CRM `/videos/[id]` разгруппирована на вкладки «Данные видео», «Транскрипция», «Скриншоты» и YouTube-only «Форматы» без изменения API и схемы данных.
+- Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
+- Документация: обновлен `docs/agent/CHANGELOG.md`.
+
 - Изменено: в CRM `/videos` заголовок видео в списке стал ссылкой на детальную карточку, как кнопка «Подробнее».
 - Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
 - Документация: обновлен `docs/agent/CHANGELOG.md`.
