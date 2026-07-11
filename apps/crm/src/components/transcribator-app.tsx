@@ -1225,7 +1225,15 @@ export function TranscribatorApp({ view = 'transcribe', videoId }: Transcribator
                       )}
                       <div className="grid gap-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                          <h3 className="text-base font-semibold break-words">{videoDisplayTitle(video)}</h3>
+                          <h3 className="text-base font-semibold break-words">
+                            <Link
+                              href={buildVideoDetailPath(video.id)}
+                              className="rounded-sm text-neutral-950 underline-offset-4 transition hover:text-neutral-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2"
+                              aria-label={`Подробнее о ${videoDisplayTitle(video)}`}
+                            >
+                              {videoDisplayTitle(video)}
+                            </Link>
+                          </h3>
                           <div className="flex flex-wrap gap-2">
                             <VideoSourceBadge video={video} />
                             <Badge variant="secondary">{formatYouTubeVideoStatus(video.status)}</Badge>

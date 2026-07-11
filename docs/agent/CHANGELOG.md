@@ -4,6 +4,10 @@
 
 ## 2026-07-11
 
+- Изменено: в CRM `/videos` заголовок видео в списке стал ссылкой на детальную карточку, как кнопка «Подробнее».
+- Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
+- Документация: обновлен `docs/agent/CHANGELOG.md`.
+
 - Изменено: в CRM `/videos` удалены отдельные кнопки «Открыть»/«Открыть YouTube», а badge источника `YouTube` стал кликабельной ссылкой на ролик.
 - Проверено: `pnpm --filter @transcribator/crm check`; `git diff --check`.
 - Документация: обновлен `docs/agent/CHANGELOG.md`.
